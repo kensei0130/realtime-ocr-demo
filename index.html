@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>カルテ番号リアルタイム照合</title>
+<style>
+  body { font-family: sans-serif; text-align: center; }
+  video { width: 90%; max-width: 600px; border: 2px solid #333; }
+  #result { font-size: 1.5rem; margin-top: 20px; }
+  .ok { color: green; font-weight: bold; }
+  .ng { color: red; font-weight: bold; }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+</head>
+<body>
+<h1>カルテ番号リアルタイム照合</h1>
+<video id="video" autoplay playsinline></video>
+<div id="result">番号スキャン中...</div>
+
+<script>
+const video = document.getElementById('video');
+const resultDiv = document.getElementById('result');
+let scanning = true;
+let receiptNumber = null;
+let prescriptionNumber = null;
+
+// カメラ起動
+navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
+.then(stream => {
+  video.srcObject = stream;
+  startOCR();
+})
+.catch(err => {
+  alert("カメラが利用できません: " + err);
+});
+
+function startOCR() {
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+
+  setInterval(async () => {
+    if (!scanning) return;
+
+    // 動画の現在フレームをCanvasに描画
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    ctx.drawImage(video, 0, 0);
+
+    // OCR実行
+    const { data: { text } } = await Tesseract.recognize(canvas, 'eng', {
+      tessedit_char_whitelist: '0123456789'
+    });
+
+    // 6桁の番号抽出
+    const matches = text.match(/\d{6}/g);
+    if (matches && matches.length >= 2) {
+      receiptNumber = matches[0];
+      prescriptionNumber = matches[1];
+      scanning = false; // 一旦スキャン停止
+
+      // 判定
+      if (receiptNumber === prescriptionNumber) {
+        resultDiv.innerHTML = `✅ 一致 (${receiptNumber})`;
+        resultDiv.className = 'ok';
+      } else {
+        resultDiv.innerHTML = `❌ 不一致<br>領収書: ${receiptNumber}<br>処方箋: ${prescriptionNumber}`;
+        resultDiv.className = 'ng';
+      }
+    } else {
+      resultDiv.innerHTML = "番号スキャン中...";
+    }
+  }, 1000); // 1秒ごとにOCR
+}
+</script>
+</body>
+</html>
