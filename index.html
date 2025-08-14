@@ -4,18 +4,45 @@
 <meta charset="UTF-8">
 <title>カルテ番号リアルタイム照合</title>
 <style>
-  body { font-family: sans-serif; text-align: center; }
-  video { width: 90%; max-width: 600px; border: 2px solid #333; }
-  #result { font-size: 1.5rem; margin-top: 20px; }
+  body { font-family: sans-serif; text-align: center; margin: 0; background: #f4f4f4; }
+  h1 { font-size: 1.4rem; padding: 10px; background: #333; color: #fff; margin: 0; }
+  video { width: 100%; max-width: 600px; border: 2px solid #333; }
+  #result { font-size: 1.2rem; margin: 20px; }
   .ok { color: green; font-weight: bold; }
   .ng { color: red; font-weight: bold; }
+  #guide {
+    position: absolute;
+    top: 20%;
+    left: 10%;
+    width: 80%;
+    height: 60%;
+    border: 3px dashed rgba(255, 0, 0, 0.6);
+    pointer-events: none;
+    box-sizing: border-box;
+  }
+  #controls { margin: 10px; }
+  button {
+    padding: 8px 16px;
+    font-size: 1rem;
+    border: none;
+    border-radius: 5px;
+    background: #333;
+    color: white;
+    cursor: pointer;
+  }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 </head>
 <body>
 <h1>カルテ番号リアルタイム照合</h1>
-<video id="video" autoplay playsinline></video>
+<div style="position: relative; display: inline-block;">
+  <video id="video" autoplay playsinline></video>
+  <div id="guide"></div>
+</div>
 <div id="result">番号スキャン中...</div>
+<div id="controls">
+  <button onclick="restartScan()">再スキャン</button>
+</div>
 
 <script>
 const video = document.getElementById('video');
@@ -24,7 +51,6 @@ let scanning = true;
 let receiptNumber = null;
 let prescriptionNumber = null;
 
-// カメラ起動
 navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
 .then(stream => {
   video.srcObject = stream;
@@ -41,24 +67,36 @@ function startOCR() {
   setInterval(async () => {
     if (!scanning) return;
 
-    // 動画の現在フレームをCanvasに描画
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
     ctx.drawImage(video, 0, 0);
 
-    // OCR実行
-    const { data: { text } } = await Tesseract.recognize(canvas, 'eng', {
+    // 前処理（グレースケール＋二値化）
+    let imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    let data = imageData.data;
+    for (let i = 0; i < data.length; i += 4) {
+      let avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
+      let bin = avg > 150 ? 255 : 0; // 二値化
+      data[i] = data[i + 1] = data[i + 2] = bin;
+    }
+    ctx.putImageData(imageData, 0, 0);
+
+    // OCR実行（日本語＋英数字）
+    const { data: { text, confidence } } = await Tesseract.recognize(canvas, 'jpn+eng', {
       tessedit_char_whitelist: '0123456789'
     });
 
-    // 6桁の番号抽出
+    if (confidence < 60) {
+      resultDiv.innerHTML = "番号スキャン中...";
+      return;
+    }
+
     const matches = text.match(/\d{6}/g);
     if (matches && matches.length >= 2) {
       receiptNumber = matches[0];
       prescriptionNumber = matches[1];
-      scanning = false; // 一旦スキャン停止
+      scanning = false;
 
-      // 判定
       if (receiptNumber === prescriptionNumber) {
         resultDiv.innerHTML = `✅ 一致 (${receiptNumber})`;
         resultDiv.className = 'ok';
@@ -66,10 +104,16 @@ function startOCR() {
         resultDiv.innerHTML = `❌ 不一致<br>領収書: ${receiptNumber}<br>処方箋: ${prescriptionNumber}`;
         resultDiv.className = 'ng';
       }
-    } else {
-      resultDiv.innerHTML = "番号スキャン中...";
     }
-  }, 1000); // 1秒ごとにOCR
+  }, 1500); // 1.5秒ごとにOCR
+}
+
+function restartScan() {
+  scanning = true;
+  receiptNumber = null;
+  prescriptionNumber = null;
+  resultDiv.innerHTML = "番号スキャン中...";
+  resultDiv.className = "";
 }
 </script>
 </body>
