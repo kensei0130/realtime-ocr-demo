@@ -14,47 +14,55 @@
 
         body {
             font-family: 'Helvetica Neue', Arial, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: #f8f9fa;
             min-height: 100vh;
             display: flex;
             flex-direction: column;
+            overflow-x: hidden;
         }
 
-        .header {
-            background: rgba(255, 255, 255, 0.95);
-            padding: 1rem;
-            text-align: center;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-        }
-
-        .header h1 {
-            color: #333;
-            font-size: 1.5rem;
-            margin-bottom: 0.5rem;
-        }
-
-        .header p {
-            color: #666;
-            font-size: 0.9rem;
-        }
-
-        .camera-container {
+        .main-container {
             flex: 1;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        .camera-section {
+            flex: 0 0 20%;
             position: relative;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
+            padding: 0.5rem;
+            background: white;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .status-section {
+            flex: 1;
             padding: 1rem;
+            overflow-y: auto;
+        }
+
+        .footer {
+            background: white;
+            padding: 0.5rem;
+            text-align: center;
+            border-top: 1px solid #e9ecef;
+            font-size: 0.75rem;
+            color: #6c757d;
         }
 
         .video-wrapper {
             position: relative;
             width: 100%;
-            max-width: 400px;
-            border-radius: 12px;
+            max-width: 250px;
+            border-radius: 6px;
             overflow: hidden;
-            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            border: 1px solid #e9ecef;
         }
 
         #video {
@@ -78,48 +86,51 @@
             left: 50%;
             transform: translate(-50%, -50%);
             width: 80%;
-            height: 60px;
-            border: 3px solid #00ff88;
-            border-radius: 8px;
-            background: rgba(0, 255, 136, 0.1);
-            box-shadow: 0 0 20px rgba(0, 255, 136, 0.5);
+            height: 40px;
+            border: 2px solid #28a745;
+            border-radius: 4px;
+            background: rgba(40, 167, 69, 0.1);
+            box-shadow: 0 0 10px rgba(40, 167, 69, 0.2);
         }
 
         .guide-frame::before {
-            content: 'カルテ番号をこの枠内に合わせてください';
+            content: 'カルテ番号を枠内に';
             position: absolute;
-            top: -35px;
+            top: -25px;
             left: 50%;
             transform: translateX(-50%);
             background: rgba(0, 0, 0, 0.8);
             color: white;
-            padding: 5px 10px;
-            border-radius: 20px;
-            font-size: 0.8rem;
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-size: 0.6rem;
             white-space: nowrap;
         }
 
         .controls {
-            margin-top: 1rem;
+            margin-top: 0.5rem;
             text-align: center;
         }
 
         .btn {
-            background: linear-gradient(145deg, #667eea, #764ba2);
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 25px;
-            font-size: 1rem;
+            background: white;
+            color: #495057;
+            border: 1px solid #dee2e6;
+            padding: 6px 12px;
+            border-radius: 15px;
+            font-size: 0.8rem;
             cursor: pointer;
-            margin: 0.5rem;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-            transition: all 0.3s ease;
+            margin: 0.2rem;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+            transition: all 0.2s ease;
+            font-weight: 500;
         }
 
         .btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+            background: #f8f9fa;
+            border-color: #adb5bd;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
         }
 
         .btn:active {
@@ -132,13 +143,11 @@
         }
 
         .status-panel {
-            background: rgba(255, 255, 255, 0.95);
-            margin-top: 1rem;
+            background: white;
             padding: 1rem;
             border-radius: 12px;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-            max-width: 400px;
-            width: 100%;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            border: 1px solid #e9ecef;
         }
 
         .status-item {
@@ -149,6 +158,7 @@
             padding: 0.8rem;
             border-radius: 8px;
             background: #f8f9fa;
+            border: 1px solid #e9ecef;
         }
 
         .status-item:last-child {
@@ -156,13 +166,14 @@
         }
 
         .status-label {
-            font-weight: bold;
-            color: #333;
+            font-weight: 600;
+            color: #495057;
+            font-size: 0.9rem;
         }
 
         .status-value {
             font-family: 'Courier New', monospace;
-            font-size: 1.1rem;
+            font-size: 1rem;
             font-weight: bold;
         }
 
@@ -171,13 +182,20 @@
         }
 
         .pending {
-            color: #ffc107;
+            color: #6c757d;
         }
 
         .matched {
-            background: linear-gradient(145deg, #28a745, #20c997);
-            color: white;
+            background: #d4edda;
+            border-color: #c3e6cb;
+            color: #155724;
             animation: pulse 1.5s ease-in-out infinite;
+        }
+
+        .unmatched {
+            background: #f8d7da;
+            border-color: #f5c6cb;
+            color: #721c24;
         }
 
         @keyframes pulse {
@@ -187,7 +205,7 @@
         }
 
         .match-icon {
-            font-size: 1.5rem;
+            font-size: 1.3rem;
             margin-left: 0.5rem;
         }
 
@@ -198,21 +216,24 @@
 
         .history {
             margin-top: 1rem;
-            font-size: 0.9rem;
-            color: #666;
+            font-size: 0.85rem;
+            color: #6c757d;
         }
 
         .history-item {
-            padding: 0.3rem;
+            padding: 0.3rem 0.5rem;
             margin: 0.2rem 0;
-            background: rgba(0, 0, 0, 0.05);
+            background: #f1f3f4;
             border-radius: 4px;
             font-family: 'Courier New', monospace;
+            border: 1px solid #e9ecef;
+            color: #495057;
         }
 
         .error-message {
-            background: #dc3545;
-            color: white;
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
             padding: 1rem;
             border-radius: 8px;
             margin: 1rem 0;
@@ -224,16 +245,17 @@
             align-items: center;
             justify-content: center;
             padding: 2rem;
+            color: #6c757d;
         }
 
         .spinner {
-            border: 3px solid rgba(255, 255, 255, 0.3);
+            border: 3px solid #f1f3f4;
             border-radius: 50%;
-            border-top: 3px solid #667eea;
-            width: 30px;
-            height: 30px;
+            border-top: 3px solid #6c757d;
+            width: 24px;
+            height: 24px;
             animation: spin 1s linear infinite;
-            margin-right: 1rem;
+            margin-right: 0.8rem;
         }
 
         @keyframes spin {
@@ -243,56 +265,59 @@
     </style>
 </head>
 <body>
-    <div class="header">
-        <h1>📋 カルテ番号照合アプリ</h1>
-        <p>領収書と処方箋のカルテ番号を照合します</p>
+    <div class="main-container">
+        <div class="camera-section">
+            <div id="loading" class="loading">
+                <div class="spinner"></div>
+                <span>カメラを初期化中...</span>
+            </div>
+
+            <div id="error" class="error-message" style="display: none;"></div>
+
+            <div id="videoContainer" class="video-wrapper" style="display: none;">
+                <video id="video" autoplay playsinline></video>
+                <div class="guide-overlay">
+                    <div class="guide-frame"></div>
+                </div>
+            </div>
+
+            <div class="controls">
+                <button id="resetBtn" class="btn" style="display: none;">🔄 リセット</button>
+                <button id="retryBtn" class="btn" style="display: none;">📷 再試行</button>
+            </div>
+        </div>
+
+        <div class="status-section">
+            <div id="statusPanel" class="status-panel" style="display: none;">
+                <div class="status-item">
+                    <span class="status-label">現在の検出番号:</span>
+                    <span id="currentNumber" class="status-value pending">---</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">1回目 (領収書):</span>
+                    <span id="firstNumber" class="status-value pending">未検出</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">2回目 (処方箋):</span>
+                    <span id="secondNumber" class="status-value pending">未検出</span>
+                </div>
+                <div id="matchResult" class="status-item" style="display: none;">
+                    <span class="status-label">照合結果:</span>
+                    <span class="status-value">
+                        <span id="matchStatus">確認中</span>
+                        <span id="matchIcon" class="match-icon"></span>
+                    </span>
+                </div>
+                <div class="history">
+                    <strong>検出履歴:</strong>
+                    <div id="historyList"></div>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <div class="camera-container">
-        <div id="loading" class="loading">
-            <div class="spinner"></div>
-            <span>カメラを初期化中...</span>
-        </div>
-
-        <div id="error" class="error-message" style="display: none;"></div>
-
-        <div id="videoContainer" class="video-wrapper" style="display: none;">
-            <video id="video" autoplay playsinline></video>
-            <div class="guide-overlay">
-                <div class="guide-frame"></div>
-            </div>
-        </div>
-
-        <div class="controls">
-            <button id="resetBtn" class="btn" style="display: none;">🔄 リセット</button>
-            <button id="retryBtn" class="btn" style="display: none;">📷 再試行</button>
-        </div>
-
-        <div id="statusPanel" class="status-panel" style="display: none;">
-            <div class="status-item">
-                <span class="status-label">現在の検出番号:</span>
-                <span id="currentNumber" class="status-value pending">---</span>
-            </div>
-            <div class="status-item">
-                <span class="status-label">1回目 (領収書):</span>
-                <span id="firstNumber" class="status-value pending">未検出</span>
-            </div>
-            <div class="status-item">
-                <span class="status-label">2回目 (処方箋):</span>
-                <span id="secondNumber" class="status-value pending">未検出</span>
-            </div>
-            <div id="matchResult" class="status-item" style="display: none;">
-                <span class="status-label">照合結果:</span>
-                <span class="status-value">
-                    <span id="matchStatus">確認中</span>
-                    <span id="matchIcon" class="match-icon"></span>
-                </span>
-            </div>
-            <div class="history">
-                <strong>検出履歴:</strong>
-                <div id="historyList"></div>
-            </div>
-        </div>
+    <div class="footer">
+        📋 カルテ番号照合アプリ
     </div>
 
     <canvas id="canvas" style="display: none;"></canvas>
@@ -538,10 +563,9 @@
                     matchStatus.textContent = '照合完了';
                     matchIcon.textContent = '✅';
                 } else {
+                    matchResult.classList.add('unmatched');
                     matchStatus.textContent = '番号不一致';
                     matchIcon.textContent = '❌';
-                    matchResult.style.background = '#dc3545';
-                    matchResult.style.color = 'white';
                 }
             }
 
