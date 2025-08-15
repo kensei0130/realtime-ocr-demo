@@ -1,145 +1,605 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<meta charset="UTF-8">
-<title>カルテ番号照合（高精度版）</title>
-<style>
-  body { font-family: sans-serif; text-align: center; background: #f4f4f4; margin: 0; }
-  h1 { font-size: 1.4rem; padding: 10px; background: #333; color: #fff; margin: 0; }
-  video { width: 100%; max-width: 600px; border: 2px solid #333; }
-  #result { font-size: 1.2rem; margin: 20px; }
-  .ok { color: green; font-weight: bold; }
-  .ng { color: red; font-weight: bold; }
-  #guide {
-    position: absolute;
-    top: 25%;
-    left: 20%;
-    width: 60%;
-    height: 30%;
-    border: 3px dashed rgba(255, 0, 0, 0.6);
-    pointer-events: none;
-    box-sizing: border-box;
-  }
-  #controls { margin: 10px; }
-  button {
-    padding: 8px 16px;
-    font-size: 1rem;
-    border: none;
-    border-radius: 5px;
-    background: #333;
-    color: white;
-    cursor: pointer;
-  }
-</style>
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>カルテ番号照合アプリ</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.0.4/tesseract.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 1rem;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            color: #333;
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .camera-container {
+            flex: 1;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+        }
+
+        .video-wrapper {
+            position: relative;
+            width: 100%;
+            max-width: 400px;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+        }
+
+        #video {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .guide-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .guide-frame {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 80%;
+            height: 60px;
+            border: 3px solid #00ff88;
+            border-radius: 8px;
+            background: rgba(0, 255, 136, 0.1);
+            box-shadow: 0 0 20px rgba(0, 255, 136, 0.5);
+        }
+
+        .guide-frame::before {
+            content: 'カルテ番号をこの枠内に合わせてください';
+            position: absolute;
+            top: -35px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            white-space: nowrap;
+        }
+
+        .controls {
+            margin-top: 1rem;
+            text-align: center;
+        }
+
+        .btn {
+            background: linear-gradient(145deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            font-size: 1rem;
+            cursor: pointer;
+            margin: 0.5rem;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            transition: all 0.3s ease;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .status-panel {
+            background: rgba(255, 255, 255, 0.95);
+            margin-top: 1rem;
+            padding: 1rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            max-width: 400px;
+            width: 100%;
+        }
+
+        .status-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.8rem;
+            padding: 0.8rem;
+            border-radius: 8px;
+            background: #f8f9fa;
+        }
+
+        .status-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .status-label {
+            font-weight: bold;
+            color: #333;
+        }
+
+        .status-value {
+            font-family: 'Courier New', monospace;
+            font-size: 1.1rem;
+            font-weight: bold;
+        }
+
+        .detected {
+            color: #28a745;
+        }
+
+        .pending {
+            color: #ffc107;
+        }
+
+        .matched {
+            background: linear-gradient(145deg, #28a745, #20c997);
+            color: white;
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.02); }
+            100% { transform: scale(1); }
+        }
+
+        .match-icon {
+            font-size: 1.5rem;
+            margin-left: 0.5rem;
+        }
+
+        .processing {
+            color: #17a2b8;
+            font-style: italic;
+        }
+
+        .history {
+            margin-top: 1rem;
+            font-size: 0.9rem;
+            color: #666;
+        }
+
+        .history-item {
+            padding: 0.3rem;
+            margin: 0.2rem 0;
+            background: rgba(0, 0, 0, 0.05);
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+        }
+
+        .error-message {
+            background: #dc3545;
+            color: white;
+            padding: 1rem;
+            border-radius: 8px;
+            margin: 1rem 0;
+            text-align: center;
+        }
+
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+        }
+
+        .spinner {
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top: 3px solid #667eea;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin-right: 1rem;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
 </head>
 <body>
-<h1>カルテ番号照合（高精度版）</h1>
-<div style="position: relative; display: inline-block;">
-  <video id="video" autoplay playsinline></video>
-  <div id="guide"></div>
-</div>
-<div id="result">番号スキャン中...</div>
-<div id="controls">
-  <button onclick="restartScan()">再スキャン</button>
-</div>
+    <div class="header">
+        <h1>📋 カルテ番号照合アプリ</h1>
+        <p>領収書と処方箋のカルテ番号を照合します</p>
+    </div>
 
-<script>
-const video = document.getElementById('video');
-const resultDiv = document.getElementById('result');
-let scanning = true;
-let firstNumber = null;
-let recentResults = [];
+    <div class="camera-container">
+        <div id="loading" class="loading">
+            <div class="spinner"></div>
+            <span>カメラを初期化中...</span>
+        </div>
 
-navigator.mediaDevices.getUserMedia({
-  video: {
-    facingMode: { exact: "environment" },
-    focusMode: "continuous",
-    width: { ideal: 1920 },
-    height: { ideal: 1080 }
-  }
-})
-.then(stream => {
-  video.srcObject = stream;
-  startOCR();
-})
-.catch(err => {
-  alert("カメラが利用できません: " + err);
-});
+        <div id="error" class="error-message" style="display: none;"></div>
 
-function startOCR() {
-  const canvas = document.createElement('canvas');
-  const ctx = canvas.getContext('2d');
+        <div id="videoContainer" class="video-wrapper" style="display: none;">
+            <video id="video" autoplay playsinline></video>
+            <div class="guide-overlay">
+                <div class="guide-frame"></div>
+            </div>
+        </div>
 
-  setInterval(async () => {
-    if (!scanning || video.videoWidth === 0) return;
+        <div class="controls">
+            <button id="resetBtn" class="btn" style="display: none;">🔄 リセット</button>
+            <button id="retryBtn" class="btn" style="display: none;">📷 再試行</button>
+        </div>
 
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+        <div id="statusPanel" class="status-panel" style="display: none;">
+            <div class="status-item">
+                <span class="status-label">現在の検出番号:</span>
+                <span id="currentNumber" class="status-value pending">---</span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">1回目 (領収書):</span>
+                <span id="firstNumber" class="status-value pending">未検出</span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">2回目 (処方箋):</span>
+                <span id="secondNumber" class="status-value pending">未検出</span>
+            </div>
+            <div id="matchResult" class="status-item" style="display: none;">
+                <span class="status-label">照合結果:</span>
+                <span class="status-value">
+                    <span id="matchStatus">確認中</span>
+                    <span id="matchIcon" class="match-icon"></span>
+                </span>
+            </div>
+            <div class="history">
+                <strong>検出履歴:</strong>
+                <div id="historyList"></div>
+            </div>
+        </div>
+    </div>
 
-    // ガイド枠の領域だけ切り取り
-    const gx = video.videoWidth * 0.2;
-    const gy = video.videoHeight * 0.25;
-    const gw = video.videoWidth * 0.6;
-    const gh = video.videoHeight * 0.3;
+    <canvas id="canvas" style="display: none;"></canvas>
 
-    ctx.drawImage(video, gx, gy, gw, gh, 0, 0, gw, gh);
+    <script>
+        class ChartNumberScanner {
+            constructor() {
+                this.video = document.getElementById('video');
+                this.canvas = document.getElementById('canvas');
+                this.ctx = this.canvas.getContext('2d');
+                this.worker = null;
+                this.stream = null;
+                this.isProcessing = false;
+                
+                this.detectionHistory = [];
+                this.maxHistoryLength = 5;
+                this.firstDetectedNumber = null;
+                this.secondDetectedNumber = null;
+                this.isMatched = false;
+                
+                this.init();
+            }
 
-    // グレースケール＋二値化＋コントラスト強化
-    let imageData = ctx.getImageData(0, 0, gw, gh);
-    let data = imageData.data;
-    for (let i = 0; i < data.length; i += 4) {
-      let avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
-      avg = avg > 150 ? 255 : 0;
-      avg = Math.min(255, avg * 1.2);
-      data[i] = data[i + 1] = data[i + 2] = avg;
-    }
-    ctx.putImageData(imageData, 0, 0);
+            async init() {
+                try {
+                    await this.initCamera();
+                    await this.initTesseract();
+                    this.setupEventListeners();
+                    this.startScanning();
+                    this.hideLoading();
+                } catch (error) {
+                    this.showError('初期化に失敗しました: ' + error.message);
+                }
+            }
 
-    // OCR（数字のみ）
-    const { data: { text, confidence } } = await Tesseract.recognize(canvas, 'eng', {
-      tessedit_char_whitelist: '0123456789',
-      tessedit_pageseg_mode: 7
-    });
+            async initCamera() {
+                const constraints = {
+                    video: {
+                        facingMode: 'environment',
+                        width: { ideal: 1920 },
+                        height: { ideal: 1080 }
+                    }
+                };
 
-    if (confidence < 60) return;
+                try {
+                    this.stream = await navigator.mediaDevices.getUserMedia(constraints);
+                    this.video.srcObject = this.stream;
+                    await new Promise(resolve => this.video.onloadedmetadata = resolve);
+                } catch (error) {
+                    throw new Error('カメラアクセスに失敗しました。ブラウザでカメラの使用を許可してください。');
+                }
+            }
 
-    const matches = text.match(/\d+/g);
-    if (matches && matches.length > 0) {
-      const currentNumber = matches[0];
-      recentResults.push(currentNumber);
+            async initTesseract() {
+                this.worker = await Tesseract.createWorker('jpn+eng', 1, {
+                    logger: m => {
+                        if (m.status === 'recognizing text') {
+                            document.getElementById('currentNumber').textContent = '処理中...';
+                            document.getElementById('currentNumber').className = 'status-value processing';
+                        }
+                    }
+                });
 
-      // 最新5件だけ保持
-      if (recentResults.length > 5) recentResults.shift();
+                await this.worker.setParameters({
+                    tessedit_char_whitelist: '0123456789',
+                    tessedit_pageseg_mode: Tesseract.PSM.SINGLE_LINE,
+                });
+            }
 
-      // 多数決で安定化
-      const stableNumber = getMostFrequent(recentResults);
-      resultDiv.innerHTML = `現在検出: ${stableNumber}`;
+            setupEventListeners() {
+                document.getElementById('resetBtn').addEventListener('click', () => this.reset());
+                document.getElementById('retryBtn').addEventListener('click', () => this.retry());
+            }
 
-      if (!firstNumber) {
-        firstNumber = stableNumber;
-      } else if (firstNumber === stableNumber) {
-        resultDiv.innerHTML = `✅ 照合完了 (${stableNumber})`;
-        resultDiv.className = 'ok';
-        scanning = false;
-      }
-    }
-  }, 1500);
-}
+            hideLoading() {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('videoContainer').style.display = 'block';
+                document.getElementById('statusPanel').style.display = 'block';
+                document.getElementById('resetBtn').style.display = 'inline-block';
+            }
 
-function getMostFrequent(arr) {
-  const counts = {};
-  arr.forEach(num => counts[num] = (counts[num] || 0) + 1);
-  return Object.keys(counts).reduce((a, b) => counts[a] > counts[b] ? a : b);
-}
+            showError(message) {
+                document.getElementById('loading').style.display = 'none';
+                const errorDiv = document.getElementById('error');
+                errorDiv.textContent = message;
+                errorDiv.style.display = 'block';
+                document.getElementById('retryBtn').style.display = 'inline-block';
+            }
 
-function restartScan() {
-  scanning = true;
-  firstNumber = null;
-  recentResults = [];
-  resultDiv.innerHTML = "番号スキャン中...";
-  resultDiv.className = "";
-}
-</script>
+            async startScanning() {
+                if (!this.isMatched) {
+                    setTimeout(() => this.captureAndProcess(), 1000);
+                }
+            }
+
+            async captureAndProcess() {
+                if (this.isProcessing || this.isMatched) return;
+
+                this.isProcessing = true;
+
+                try {
+                    const imageData = this.captureFrame();
+                    const processedImage = this.preprocessImage(imageData);
+                    const number = await this.performOCR(processedImage);
+                    
+                    if (number) {
+                        this.handleDetectedNumber(number);
+                    }
+                } catch (error) {
+                    console.error('OCR処理エラー:', error);
+                } finally {
+                    this.isProcessing = false;
+                    this.startScanning();
+                }
+            }
+
+            captureFrame() {
+                const videoRect = this.video.getBoundingClientRect();
+                const videoWidth = this.video.videoWidth;
+                const videoHeight = this.video.videoHeight;
+                
+                this.canvas.width = videoWidth;
+                this.canvas.height = videoHeight;
+                
+                this.ctx.drawImage(this.video, 0, 0, videoWidth, videoHeight);
+                
+                // ガイド枠の領域を計算（中央80%の幅、60pxの高さ相当）
+                const frameWidth = videoWidth * 0.8;
+                const frameHeight = Math.min(videoHeight * 0.15, 100);
+                const frameX = (videoWidth - frameWidth) / 2;
+                const frameY = (videoHeight - frameHeight) / 2;
+                
+                return this.ctx.getImageData(frameX, frameY, frameWidth, frameHeight);
+            }
+
+            preprocessImage(imageData) {
+                const data = imageData.data;
+                
+                // グレースケール化と二値化
+                for (let i = 0; i < data.length; i += 4) {
+                    const gray = Math.round(0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]);
+                    const enhanced = Math.min(255, gray * 1.2); // コントラスト強化
+                    const binary = enhanced > 150 ? 255 : 0; // 二値化
+                    
+                    data[i] = data[i + 1] = data[i + 2] = binary;
+                }
+                
+                return imageData;
+            }
+
+            async performOCR(imageData) {
+                this.canvas.width = imageData.width;
+                this.canvas.height = imageData.height;
+                this.ctx.putImageData(imageData, 0, 0);
+                
+                const { data: { text } } = await this.worker.recognize(this.canvas);
+                
+                // 数字のみを抽出
+                const numbers = text.replace(/[^0-9]/g, '');
+                return numbers.length >= 3 ? numbers : null;
+            }
+
+            handleDetectedNumber(number) {
+                // 履歴に追加
+                this.detectionHistory.push(number);
+                if (this.detectionHistory.length > this.maxHistoryLength) {
+                    this.detectionHistory.shift();
+                }
+
+                // 現在の番号を表示
+                document.getElementById('currentNumber').textContent = number;
+                document.getElementById('currentNumber').className = 'status-value detected';
+
+                // 履歴を表示
+                this.updateHistory();
+
+                // 多数決で安定した番号を決定
+                const stableNumber = this.getStableNumber();
+                
+                if (stableNumber) {
+                    if (!this.firstDetectedNumber) {
+                        this.firstDetectedNumber = stableNumber;
+                        document.getElementById('firstNumber').textContent = stableNumber;
+                        document.getElementById('firstNumber').className = 'status-value detected';
+                        this.detectionHistory = []; // 履歴をリセット
+                    } else if (!this.secondDetectedNumber && stableNumber === this.firstDetectedNumber) {
+                        this.secondDetectedNumber = stableNumber;
+                        document.getElementById('secondNumber').textContent = stableNumber;
+                        document.getElementById('secondNumber').className = 'status-value detected';
+                        this.showMatchResult(true);
+                    } else if (!this.secondDetectedNumber && stableNumber !== this.firstDetectedNumber) {
+                        this.secondDetectedNumber = stableNumber;
+                        document.getElementById('secondNumber').textContent = stableNumber;
+                        document.getElementById('secondNumber').className = 'status-value detected';
+                        this.showMatchResult(false);
+                    }
+                }
+            }
+
+            getStableNumber() {
+                if (this.detectionHistory.length < 2) return null;
+
+                // 最新の2回が同じ数字の場合、それを安定した番号とする
+                const latest = this.detectionHistory[this.detectionHistory.length - 1];
+                const secondLatest = this.detectionHistory[this.detectionHistory.length - 2];
+                
+                if (latest === secondLatest) {
+                    return latest;
+                }
+
+                // 過半数を占める番号があるかチェック
+                const counts = {};
+                this.detectionHistory.forEach(num => {
+                    counts[num] = (counts[num] || 0) + 1;
+                });
+
+                const maxCount = Math.max(...Object.values(counts));
+                if (maxCount >= Math.ceil(this.detectionHistory.length / 2)) {
+                    return Object.keys(counts).find(key => counts[key] === maxCount);
+                }
+
+                return null;
+            }
+
+            updateHistory() {
+                const historyList = document.getElementById('historyList');
+                historyList.innerHTML = this.detectionHistory
+                    .slice(-5)
+                    .map(num => `<div class="history-item">${num}</div>`)
+                    .join('');
+            }
+
+            showMatchResult(isMatch) {
+                this.isMatched = true;
+                const matchResult = document.getElementById('matchResult');
+                const matchStatus = document.getElementById('matchStatus');
+                const matchIcon = document.getElementById('matchIcon');
+
+                matchResult.style.display = 'flex';
+
+                if (isMatch) {
+                    matchResult.classList.add('matched');
+                    matchStatus.textContent = '照合完了';
+                    matchIcon.textContent = '✅';
+                } else {
+                    matchStatus.textContent = '番号不一致';
+                    matchIcon.textContent = '❌';
+                    matchResult.style.background = '#dc3545';
+                    matchResult.style.color = 'white';
+                }
+            }
+
+            reset() {
+                this.firstDetectedNumber = null;
+                this.secondDetectedNumber = null;
+                this.isMatched = false;
+                this.detectionHistory = [];
+
+                document.getElementById('currentNumber').textContent = '---';
+                document.getElementById('currentNumber').className = 'status-value pending';
+                document.getElementById('firstNumber').textContent = '未検出';
+                document.getElementById('firstNumber').className = 'status-value pending';
+                document.getElementById('secondNumber').textContent = '未検出';
+                document.getElementById('secondNumber').className = 'status-value pending';
+                document.getElementById('matchResult').style.display = 'none';
+                document.getElementById('matchResult').className = 'status-item';
+                document.getElementById('historyList').innerHTML = '';
+
+                this.startScanning();
+            }
+
+            async retry() {
+                document.getElementById('error').style.display = 'none';
+                document.getElementById('retryBtn').style.display = 'none';
+                document.getElementById('loading').style.display = 'flex';
+
+                try {
+                    await this.initCamera();
+                    this.hideLoading();
+                    this.startScanning();
+                } catch (error) {
+                    this.showError('再試行に失敗しました: ' + error.message);
+                }
+            }
+
+            destroy() {
+                if (this.worker) {
+                    this.worker.terminate();
+                }
+                if (this.stream) {
+                    this.stream.getTracks().forEach(track => track.stop());
+                }
+            }
+        }
+
+        // アプリケーション開始
+        let scanner;
+        window.addEventListener('DOMContentLoaded', () => {
+            scanner = new ChartNumberScanner();
+        });
+
+        // ページを離れる際のクリーンアップ
+        window.addEventListener('beforeunload', () => {
+            if (scanner) {
+                scanner.destroy();
+            }
+        });
+    </script>
 </body>
 </html>
