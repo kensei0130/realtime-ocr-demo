@@ -2,9 +2,9 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>カルテ番号リアルタイム照合</title>
+<title>カルテ番号照合（リアルタイム）</title>
 <style>
-  body { font-family: sans-serif; text-align: center; margin: 0; background: #f4f4f4; }
+  body { font-family: sans-serif; text-align: center; background: #f4f4f4; margin: 0; }
   h1 { font-size: 1.4rem; padding: 10px; background: #333; color: #fff; margin: 0; }
   video { width: 100%; max-width: 600px; border: 2px solid #333; }
   #result { font-size: 1.2rem; margin: 20px; }
@@ -34,7 +34,7 @@
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 </head>
 <body>
-<h1>カルテ番号リアルタイム照合</h1>
+<h1>カルテ番号照合</h1>
 <div style="position: relative; display: inline-block;">
   <video id="video" autoplay playsinline></video>
   <div id="guide"></div>
@@ -48,8 +48,7 @@
 const video = document.getElementById('video');
 const resultDiv = document.getElementById('result');
 let scanning = true;
-let receiptNumber = null;
-let prescriptionNumber = null;
+let firstNumber = null;
 
 navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
 .then(stream => {
@@ -81,37 +80,32 @@ function startOCR() {
     }
     ctx.putImageData(imageData, 0, 0);
 
-    // OCR実行（日本語＋英数字）
+    // OCR（数字のみ抽出）
     const { data: { text, confidence } } = await Tesseract.recognize(canvas, 'jpn+eng', {
       tessedit_char_whitelist: '0123456789'
     });
 
-    if (confidence < 60) {
-      resultDiv.innerHTML = "番号スキャン中...";
-      return;
-    }
+    if (confidence < 60) return;
 
-    const matches = text.match(/\d{6}/g);
-    if (matches && matches.length >= 2) {
-      receiptNumber = matches[0];
-      prescriptionNumber = matches[1];
-      scanning = false;
+    const matches = text.match(/\d+/g); // 数字なら何桁でもOK
+    if (matches && matches.length > 0) {
+      const currentNumber = matches[0]; // 最初に見つかった数字だけ使用
+      resultDiv.innerHTML = `現在検出: ${currentNumber}`;
 
-      if (receiptNumber === prescriptionNumber) {
-        resultDiv.innerHTML = `✅ 一致 (${receiptNumber})`;
+      if (!firstNumber) {
+        firstNumber = currentNumber;
+      } else if (firstNumber === currentNumber) {
+        resultDiv.innerHTML = `✅ 照合完了 (${currentNumber})`;
         resultDiv.className = 'ok';
-      } else {
-        resultDiv.innerHTML = `❌ 不一致<br>領収書: ${receiptNumber}<br>処方箋: ${prescriptionNumber}`;
-        resultDiv.className = 'ng';
+        scanning = false;
       }
     }
-  }, 1500); // 1.5秒ごとにOCR
+  }, 1500);
 }
 
 function restartScan() {
   scanning = true;
-  receiptNumber = null;
-  prescriptionNumber = null;
+  firstNumber = null;
   resultDiv.innerHTML = "番号スキャン中...";
   resultDiv.className = "";
 }
