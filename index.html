@@ -285,6 +285,14 @@
             font-family: 'Courier New', monospace;
             border: 1px solid #e9ecef;
             color: #495057;
+            font-size: 0.75rem;  /* 複数番号表示のためフォントサイズを小さく */
+            line-height: 1.3;
+        }
+
+        .history-item.no-data {
+            font-style: italic;
+            color: #6c757d;
+            text-align: center;
         }
 
         .error-message {
@@ -723,7 +731,8 @@
                         } else {
                             const detectedElement = document.getElementById('detectedNumbers');
                             if (detectedElement) {
-                                detectedElement.textContent = 'スキャン中...';
+                                // 検出された番号がない場合でもスキャン状態を表示
+                                detectedElement.textContent = 'スキャン中...（番号を検出中）';
                                 detectedElement.className = 'status-value pending';
                             }
                         }
@@ -801,11 +810,30 @@
                 try {
                     const { data: { text } } = await this.worker.recognize(this.canvas);
                     const allNumbers = this.extractAllNumbers(text);
+                    
+                    // 1回スキャンモードでは読み取れた全ての番号を履歴に追加
+                    if (allNumbers.length > 0) {
+                        this.addNumbersToHistory(allNumbers);
+                    }
+                    
                     return this.findDuplicates(allNumbers, text);
                 } catch (error) {
                     console.error('重複検出エラー:', error);
                     return [];
                 }
+            }
+
+            addNumbersToHistory(numbers) {
+                // 読み取れた全ての番号を履歴に追加
+                const timestamp = new Date().toLocaleTimeString();
+                const historyEntry = `[${timestamp}] 検出: ${numbers.join(', ')}`;
+                
+                this.detectionHistory.push(historyEntry);
+                if (this.detectionHistory.length > this.maxHistoryLength) {
+                    this.detectionHistory.shift();
+                }
+                
+                this.updateHistory();
             }
 
             extractAllNumbers(text) {
@@ -919,10 +947,14 @@
             updateHistory() {
                 const historyList = document.getElementById('historyList');
                 if (historyList) {
-                    historyList.innerHTML = this.detectionHistory
-                        .slice(-5)
-                        .map(num => `<div class="history-item">${num}</div>`)
-                        .join('');
+                    if (this.detectionHistory.length === 0) {
+                        historyList.innerHTML = '<div class="history-item">まだ検出履歴がありません</div>';
+                    } else {
+                        historyList.innerHTML = this.detectionHistory
+                            .slice(-5)
+                            .map(entry => `<div class="history-item">${entry}</div>`)
+                            .join('');
+                    }
                 }
             }
 
@@ -964,6 +996,9 @@
                 }
                 if (duplicateResult) duplicateResult.style.display = 'none';
                 if (historyList) historyList.innerHTML = '';
+
+                // 履歴の初期表示を設定
+                this.updateHistory();
 
                 if (this.scanMode === 'sequential') {
                     const currentElement = document.getElementById('currentNumber');
