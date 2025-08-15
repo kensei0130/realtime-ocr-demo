@@ -348,16 +348,16 @@
 
         <div class="status-section">
             <div class="mode-selector">
-                <button id="sequentialModeBtn" class="mode-btn active">📋 2回スキャン</button>
-                <button id="singleModeBtn" class="mode-btn">🔍 1回スキャン</button>
+                <button id="sequentialModeBtn" class="mode-btn">📋 2回スキャン</button>
+                <button id="singleModeBtn" class="mode-btn active">🔍 1回スキャン</button>
             </div>
 
-            <div id="singleScanInfo" class="single-scan-info" style="display: none;">
+            <div id="singleScanInfo" class="single-scan-info">
                 💡 1枚の用紙に記載された2つの同じカルテ番号を自動検出します
             </div>
 
             <div id="statusPanel" class="status-panel" style="display: none;">
-                <div id="sequentialStatus">
+                <div id="sequentialStatus" style="display: none;">
                     <div class="status-item">
                         <span class="status-label">現在の検出番号:</span>
                         <span id="currentNumber" class="status-value pending">---</span>
@@ -372,7 +372,7 @@
                     </div>
                 </div>
 
-                <div id="singleScanStatus" style="display: none;">
+                <div id="singleScanStatus">
                     <div class="status-item">
                         <span class="status-label">検出された番号:</span>
                         <span id="detectedNumbers" class="status-value pending">スキャン中...</span>
@@ -422,7 +422,7 @@
                 this.secondDetectedNumber = null;
                 this.isMatched = false;
                 
-                this.scanMode = 'sequential';
+                this.scanMode = 'single';  // デフォルトを1回スキャンに変更
                 this.isScanning = false;  // スキャン状態管理を追加
                 
                 this.init();
@@ -983,9 +983,10 @@
                         secondElement.className = 'status-value pending';
                     }
                 } else {
+                    // デフォルトの1回スキャンモード用の初期化
                     const detectedElement = document.getElementById('detectedNumbers');
                     if (detectedElement) {
-                        detectedElement.textContent = 'スキャン中...';
+                        detectedElement.textContent = 'スキャン開始を押してください';
                         detectedElement.className = 'status-value pending';
                     }
                 }
