@@ -327,6 +327,59 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+
+        @keyframes focusPulse {
+            0% { 
+                transform: scale(1.5);
+                opacity: 1;
+            }
+            50% {
+                transform: scale(1);
+                opacity: 0.8;
+            }
+            100% { 
+                transform: scale(0.8);
+                opacity: 0;
+            }
+        }
+
+        .camera-info {
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 0.5rem;
+            border-radius: 6px;
+            font-size: 0.7rem;
+            text-align: center;
+            margin-top: 0.5rem;
+            display: none;
+        }
+
+        .focus-zone {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 80%;
+            height: 80%;
+            border: 1px dashed rgba(255, 255, 255, 0.5);
+            border-radius: 8px;
+            pointer-events: none;
+            z-index: 100;
+        }
+
+        .focus-zone::before {
+            content: 'タップでフォーカス';
+            position: absolute;
+            bottom: -25px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.6rem;
+            white-space: nowrap;
+        }
     </style>
 </head>
 <body>
@@ -343,8 +396,11 @@
                 <video id="video" autoplay playsinline></video>
                 <div class="guide-overlay">
                     <div class="guide-frame"></div>
+                    <div id="focusZone" class="focus-zone" style="display: none;"></div>
                 </div>
             </div>
+
+            <div id="cameraInfo" class="camera-info"></div>
 
             <div class="controls">
                 <button id="startScanBtn" class="btn">▶️ スキャン開始</button>
@@ -433,39 +489,217 @@
                 this.scanMode = 'single';  // デフォルトを1回スキャンに変更
                 this.isScanning = false;  // スキャン状態管理を追加
                 
+                // Phase 2: デバイス情報とカメラ機能管理
+                this.deviceInfo = null;
+                this.cameraCapabilities = null;
+                this.currentTrack = null;
+                
                 this.init();
             }
 
             async init() {
                 try {
+                    // Phase 2: デバイス情報の取得
+                    this.deviceInfo = await this.detectDevice();
+                    console.log('Device Info:', this.deviceInfo);
+                    
                     await this.initCamera();
                     await this.initTesseract();
                     this.setupEventListeners();
-                    // 自動スキャン開始を削除
-                    // this.startScanning();
                     this.hideLoading();
                 } catch (error) {
                     this.showError('初期化に失敗しました: ' + error.message);
                 }
             }
 
-            async initCamera() {
-                // Phase 1: 解像度を1920×1080から1280×720に削減
-                const constraints = {
-                    video: {
-                        facingMode: 'environment',
-                        width: { ideal: 1280 },  // 削減: 1920 → 1280
-                        height: { ideal: 720 }   // 削減: 1080 → 720
-                    }
+            async detectDevice() {
+                const userAgent = navigator.userAgent.toLowerCase();
+                
+                const deviceInfo = {
+                    isAndroid: /android/.test(userAgent),
+                    isIOS: /iphone|ipad|ipod/.test(userAgent),
+                    isLowEnd: navigator.hardwareConcurrency <= 2 || navigator.deviceMemory <= 2,
+                    browserName: this.getBrowserName(userAgent),
+                    screenSize: { width: window.screen.width, height: window.screen.height }
                 };
+                
+                console.log('Detected device:', deviceInfo);
+                return deviceInfo;
+            }
+
+            getBrowserName(userAgent) {
+                if (userAgent.includes('chrome')) return 'chrome';
+                if (userAgent.includes('firefox')) return 'firefox';
+                if (userAgent.includes('safari')) return 'safari';
+                if (userAgent.includes('edge')) return 'edge';
+                return 'unknown';
+            }
+
+            async initCamera() {
+                // Phase 2: デバイス適応的画質設定
+                const constraints = this.getOptimalConstraints();
+                console.log('Camera constraints:', constraints);
 
                 try {
                     this.stream = await navigator.mediaDevices.getUserMedia(constraints);
                     this.video.srcObject = this.stream;
                     await new Promise(resolve => this.video.onloadedmetadata = resolve);
+                    
+                    // Phase 2: カメラ機能の検出
+                    this.currentTrack = this.stream.getVideoTracks()[0];
+                    this.cameraCapabilities = this.currentTrack.getCapabilities();
+                    console.log('Camera capabilities:', this.cameraCapabilities);
+                    
+                    // Phase 2: タップフォーカス機能の設定
+                    this.setupTapToFocus();
+                    
+                    // Phase 2: フォーカス状態の表示
+                    this.showCameraInfo();
+                    
                 } catch (error) {
                     throw new Error('カメラアクセスに失敗しました。ブラウザでカメラの使用を許可してください。');
                 }
+            }
+
+            getOptimalConstraints() {
+                if (this.deviceInfo.isAndroid && this.deviceInfo.isLowEnd) {
+                    // 低スペックAndroid向け
+                    return {
+                        video: {
+                            facingMode: 'environment',
+                            width: { ideal: 640 },
+                            height: { ideal: 480 },
+                            frameRate: { ideal: 15 }
+                        }
+                    };
+                } else if (this.deviceInfo.isAndroid) {
+                    // 標準Android向け
+                    return {
+                        video: {
+                            facingMode: 'environment',
+                            width: { ideal: 1280 },
+                            height: { ideal: 720 },
+                            frameRate: { ideal: 20 },
+                            focusMode: 'continuous'
+                        }
+                    };
+                } else {
+                    // iPhone等向け
+                    return {
+                        video: {
+                            facingMode: 'environment',
+                            width: { ideal: 1280 },
+                            height: { ideal: 720 },
+                            frameRate: { ideal: 25 }
+                        }
+                    };
+                }
+            }
+
+            setupTapToFocus() {
+                if (!this.deviceInfo.isAndroid || !this.currentTrack) return;
+                
+                console.log('Setting up tap-to-focus for Android');
+                
+                this.video.addEventListener('click', async (e) => {
+                    e.preventDefault();
+                    await this.performTapToFocus(e);
+                });
+                
+                // タッチデバイス用
+                this.video.addEventListener('touchend', async (e) => {
+                    e.preventDefault();
+                    if (e.changedTouches.length > 0) {
+                        const touch = e.changedTouches[0];
+                        await this.performTapToFocus(touch);
+                    }
+                });
+            }
+
+            async performTapToFocus(event) {
+                try {
+                    const rect = this.video.getBoundingClientRect();
+                    const x = (event.clientX - rect.left) / rect.width;
+                    const y = (event.clientY - rect.top) / rect.height;
+                    
+                    console.log(`Tap-to-focus at: (${x.toFixed(2)}, ${y.toFixed(2)})`);
+                    
+                    // フォーカスインジケーターを表示
+                    this.showFocusIndicator(event.clientX - rect.left, event.clientY - rect.top);
+                    
+                    // フォーカス実行
+                    if (this.cameraCapabilities.focusMode && this.cameraCapabilities.focusMode.includes('manual')) {
+                        await this.currentTrack.applyConstraints({
+                            advanced: [{
+                                focusMode: 'single-shot',
+                                pointsOfInterest: [{ x, y }]
+                            }]
+                        });
+                        console.log('Manual focus applied');
+                    } else {
+                        // フォールバック: 連続AFの再設定
+                        await this.currentTrack.applyConstraints({
+                            focusMode: 'continuous'
+                        });
+                        console.log('Continuous focus re-applied');
+                    }
+                } catch (error) {
+                    console.log('Tap-to-focus failed:', error.message);
+                }
+            }
+
+            showFocusIndicator(x, y) {
+                // 既存のインジケーターを削除
+                const existing = document.querySelector('.focus-indicator');
+                if (existing) existing.remove();
+                
+                // 新しいフォーカスインジケーターを作成
+                const indicator = document.createElement('div');
+                indicator.className = 'focus-indicator';
+                indicator.style.cssText = `
+                    position: absolute;
+                    left: ${x - 25}px;
+                    top: ${y - 25}px;
+                    width: 50px;
+                    height: 50px;
+                    border: 2px solid #00ff88;
+                    border-radius: 50%;
+                    pointer-events: none;
+                    animation: focusPulse 1s ease-out;
+                    z-index: 1000;
+                `;
+                
+                this.video.parentElement.appendChild(indicator);
+                
+                // 1秒後に削除
+                setTimeout(() => {
+                    if (indicator.parentElement) {
+                        indicator.remove();
+                    }
+                }, 1000);
+            }
+
+            showCameraInfo() {
+                const infoElement = document.getElementById('cameraInfo');
+                if (!infoElement) return;
+                
+                let infoText = '';
+                
+                if (this.deviceInfo.isAndroid) {
+                    infoText += '📱 Android検出 ';
+                    if (this.cameraCapabilities.focusMode) {
+                        infoText += '| 📷 タップでフォーカス ';
+                    }
+                } else if (this.deviceInfo.isIOS) {
+                    infoText += '📱 iOS検出 | 📷 自動フォーカス ';
+                }
+                
+                if (this.deviceInfo.isLowEnd) {
+                    infoText += '| ⚡ 省電力モード';
+                }
+                
+                infoElement.textContent = infoText;
+                infoElement.style.display = 'block';
             }
 
             async initTesseract() {
@@ -609,6 +843,12 @@
                 // スキャン開始ボタンを表示
                 const startScanBtn = document.getElementById('startScanBtn');
                 if (startScanBtn) startScanBtn.style.display = 'inline-block';
+                
+                // Phase 2: Android向けフォーカスゾーンの表示
+                if (this.deviceInfo && this.deviceInfo.isAndroid) {
+                    const focusZone = document.getElementById('focusZone');
+                    if (focusZone) focusZone.style.display = 'block';
+                }
                 
                 // モードボタンのイベントリスナーを再確認
                 this.ensureModeButtonEvents();
@@ -1054,6 +1294,9 @@
                 }
                 if (this.stream) {
                     this.stream.getTracks().forEach(track => track.stop());
+                }
+                if (this.currentTrack) {
+                    this.currentTrack.stop();
                 }
             }
         }
