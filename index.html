@@ -58,7 +58,7 @@
         .video-wrapper {
             position: relative;
             width: 100%;
-            max-width: 250px;
+            max-width: 400px;  /* 横幅を拡大: 250px → 400px */
             border-radius: 6px;
             overflow: hidden;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
@@ -69,6 +69,8 @@
             width: 100%;
             height: auto;
             display: block;
+            object-fit: cover;  /* アスペクト比を維持しつつ枠に合わせる */
+            aspect-ratio: 16/9;  /* 横長のアスペクト比を強制 */
         }
 
         .guide-overlay {
@@ -85,8 +87,8 @@
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            width: 60%;  /* Phase 1: ガイド枠表示も80%から60%に縮小 */
-            height: 35px; /* Phase 1: 高さも40pxから35pxに縮小 */
+            width: 70%;  /* 横長に合わせて幅を調整: 60% → 70% */
+            height: 25px; /* 横長表示に合わせて高さをさらに縮小: 35px → 25px */
             border: 2px solid #28a745;
             border-radius: 4px;
             background: rgba(40, 167, 69, 0.1);
@@ -96,7 +98,7 @@
         .guide-frame::before {
             content: 'カルテ番号を枠内に';
             position: absolute;
-            top: -25px;
+            top: -20px;  /* 高さ調整: -25px → -20px */
             left: 50%;
             transform: translateX(-50%);
             background: rgba(0, 0, 0, 0.8);
@@ -750,9 +752,9 @@
                 if (this.scanMode === 'single') {
                     return this.ctx.getImageData(0, 0, videoWidth, videoHeight);
                 } else {
-                    // Phase 1: ROI縮小 - ガイド枠を80%から60%に縮小
-                    const frameWidth = videoWidth * 0.6;  // 縮小: 0.8 → 0.6
-                    const frameHeight = Math.min(videoHeight * 0.12, 80); // 縮小: 0.15 → 0.12, 100 → 80
+                    // 横長表示に合わせてROIを調整
+                    const frameWidth = videoWidth * 0.7;  /* 横長用に拡大: 0.6 → 0.7 */
+                    const frameHeight = Math.min(videoHeight * 0.08, 60); /* 横長用に縮小: 0.12 → 0.08, 80 → 60 */
                     const frameX = (videoWidth - frameWidth) / 2;
                     const frameY = (videoHeight - frameHeight) / 2;
                     
