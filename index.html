@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -96,7 +97,7 @@
         }
 
         .guide-frame::before {
-            content: '4桁の番号を枠内に';
+            content: 'カルテ番号を枠内に';
             position: absolute;
             top: -20px;
             left: 50%;
@@ -327,17 +328,6 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
-
-        .digit-info {
-            background: #fff3cd;
-            border: 1px solid #ffeaa7;
-            color: #856404;
-            padding: 0.6rem;
-            border-radius: 6px;
-            font-size: 0.8rem;
-            margin-bottom: 0.8rem;
-            text-align: center;
-        }
     </style>
 </head>
 <body>
@@ -371,19 +361,15 @@
                 <button id="sequentialModeBtn" class="mode-btn">📋 2回スキャン</button>
             </div>
 
-            <div class="digit-info">
-                📝 4桁のカルテ番号のみを認識します
-            </div>
-
             <div id="singleScanInfo" class="single-scan-info">
-                💡 1枚の用紙に記載された2つの同じ4桁カルテ番号を自動検出します
+                💡 1枚の用紙に記載された2つの同じカルテ番号を自動検出します
             </div>
 
             <div id="statusPanel" class="status-panel" style="display: none;">
                 <div id="sequentialStatus" style="display: none;">
                     <div class="status-item">
                         <span class="status-label">現在の検出番号:</span>
-                        <span id="currentNumber" class="status-value pending">----</span>
+                        <span id="currentNumber" class="status-value pending">---</span>
                     </div>
                     <div class="status-item">
                         <span class="status-label">1回目 (領収書):</span>
@@ -397,7 +383,7 @@
 
                 <div id="singleScanStatus">
                     <div class="status-item">
-                        <span class="status-label">検出された4桁番号:</span>
+                        <span class="status-label">検出された番号:</span>
                         <span id="detectedNumbers" class="status-value pending">スキャン開始を押してください</span>
                     </div>
                 </div>
@@ -411,7 +397,7 @@
                 </div>
 
                 <div id="duplicateResult" class="duplicate-result" style="display: none;">
-                    <strong>✅ 同じ4桁番号を検出しました</strong>
+                    <strong>✅ 同じ番号を検出しました</strong>
                     <div id="duplicateNumbers" class="duplicate-numbers"></div>
                 </div>
 
@@ -424,7 +410,7 @@
     </div>
 
     <div class="footer">
-        📋 カルテ番号照合アプリ（4桁専用）
+        📋 カルテ番号照合アプリ
     </div>
 
     <canvas id="canvas" style="display: none;"></canvas>
@@ -447,11 +433,6 @@
                 
                 this.scanMode = 'single';
                 this.isScanning = false;
-                
-                // 4桁専用設定
-                this.targetDigits = 4;
-                this.minDigits = 4;
-                this.maxDigits = 4;
                 
                 // 高速化用の変数
                 this.previousResults = [];
@@ -670,8 +651,10 @@
                 if (stopScanBtn && !stopScanBtn.hasAttribute('data-listener-added')) {
                     stopScanBtn.addEventListener('click', (e) => {
                         e.preventDefault();
-                        this.previousResults = [];
-                        this.stopScanning();
+                        // 高速化用変数もリセット
+                this.previousResults = [];
+
+                this.stopScanning();
                     });
                     stopScanBtn.setAttribute('data-listener-added', 'true');
                     console.log('Stop scan button listener ensured');
@@ -716,11 +699,12 @@
             scanLoop() {
                 if (!this.isScanning || this.isMatched) return;
                 
+                // 高速化: スキャン間隔を2.5秒から1.5秒に短縮（高速判定により負荷軽減）
                 setTimeout(() => {
                     this.captureAndProcess().then(() => {
                         this.scanLoop();
                     });
-                }, 1500);
+                }, 1500); // 高速化: 2500ms → 1500ms
             }
 
             async captureAndProcess() {
@@ -735,8 +719,8 @@
                     const processedImage = this.preprocessImage(imageData);
                     
                     if (this.scanMode === 'sequential') {
-                        const number = await this.performTieredOCR(processedImage);
-                        if (number && this.isValidNumber(number)) {
+                        const number = await this.performTieredOCR(processedImage); // 高速化: 段階的OCR
+                        if (number) {
                             this.handleSequentialDetection(number);
                         }
                     } else {
@@ -746,7 +730,7 @@
                         } else {
                             const detectedElement = document.getElementById('detectedNumbers');
                             if (detectedElement) {
-                                detectedElement.textContent = 'スキャン中...（4桁番号を検出中）';
+                                detectedElement.textContent = 'スキャン中...（番号を検出中）';
                                 detectedElement.className = 'status-value pending';
                             }
                         }
@@ -756,11 +740,6 @@
                 } finally {
                     this.isProcessing = false;
                 }
-            }
-
-            // 4桁番号の妥当性チェック
-            isValidNumber(number) {
-                return number && number.length === this.targetDigits && /^\d{4}$/.test(number);
             }
 
             captureFrame() {
@@ -779,15 +758,18 @@
                 if (this.scanMode === 'single') {
                     return this.ctx.getImageData(0, 0, videoWidth, videoHeight);
                 } else {
+                    // 高速化: ROI動的最適化
                     const roi = this.getOptimizedROI(videoWidth, videoHeight);
                     return this.ctx.getImageData(roi.x, roi.y, roi.width, roi.height);
                 }
             }
 
             getOptimizedROI(videoWidth, videoHeight) {
+                // 前回検出結果がある場合は範囲を最適化
                 if (this.previousResults.length > 0) {
                     const lastResult = this.previousResults[this.previousResults.length - 1];
                     if (lastResult.roi) {
+                        // 前回検出位置周辺に絞り込み（25%縮小）
                         return {
                             width: lastResult.roi.width * 0.75,
                             height: lastResult.roi.height * 0.75,
@@ -797,6 +779,7 @@
                     }
                 }
                 
+                // 標準ROI
                 const frameWidth = videoWidth * 0.7;
                 const frameHeight = Math.min(videoHeight * 0.08, 60);
                 return {
@@ -833,25 +816,29 @@
                 const { data: { text } } = await this.worker.recognize(this.canvas);
                 
                 const numbers = text.replace(/[^0-9]/g, '');
-                return this.isValidNumber(numbers) ? numbers : null;
+                return numbers.length >= 3 ? numbers : null;
             }
 
+            // 高速化: 段階的解像度処理
             async performTieredOCR(imageData) {
                 if (!imageData || !this.worker) return null;
 
+                // Step 1: 高速プリスキャン（50%縮小）
                 if (this.quickScanEnabled) {
                     const quickResult = await this.quickPreScan(imageData);
-                    if (quickResult && quickResult.confidence > this.confidenceThreshold && this.isValidNumber(quickResult.text)) {
+                    if (quickResult && quickResult.confidence > this.confidenceThreshold) {
                         console.log('Quick scan success:', quickResult.text);
                         return quickResult.text;
                     }
                 }
 
+                // Step 2: 標準スキャン
                 return await this.performOCR(imageData);
             }
 
             async quickPreScan(imageData) {
                 try {
+                    // 画像を50%に縮小
                     const scaledImageData = this.scaleDownImage(imageData, 0.5);
                     
                     this.canvas.width = scaledImageData.width;
@@ -861,10 +848,10 @@
                     const { data: { text, confidence } } = await this.worker.recognize(this.canvas);
                     const numbers = text.replace(/[^0-9]/g, '');
                     
-                    if (this.isValidNumber(numbers)) {
+                    if (numbers.length >= 3) {
                         return {
                             text: numbers,
-                            confidence: confidence / 100
+                            confidence: confidence / 100 // 0-1の範囲に正規化
                         };
                     }
                     
@@ -890,10 +877,10 @@
                         const origIndex = (origY * width + origX) * 4;
                         const newIndex = (y * newWidth + x) * 4;
                         
-                        newData[newIndex] = data[origIndex];
-                        newData[newIndex + 1] = data[origIndex + 1];
-                        newData[newIndex + 2] = data[origIndex + 2];
-                        newData[newIndex + 3] = data[origIndex + 3];
+                        newData[newIndex] = data[origIndex];         // R
+                        newData[newIndex + 1] = data[origIndex + 1]; // G
+                        newData[newIndex + 2] = data[origIndex + 2]; // B
+                        newData[newIndex + 3] = data[origIndex + 3]; // A
                     }
                 }
                 
@@ -908,15 +895,18 @@
                 this.ctx.putImageData(imageData, 0, 0);
                 
                 try {
+                    // 高速化: プログレッシブ表示
                     this.updateProgressiveStatus('🔍 解析中...');
                     
                     const { data: { text, words } } = await this.worker.recognize(this.canvas);
-                    const allNumbers = this.extractValidNumbers(text);
+                    const allNumbers = this.extractAllNumbers(text);
                     
                     if (allNumbers.length > 0) {
+                        // 高速化: 候補番号の事前表示
                         this.showCandidateNumbers(allNumbers);
                         this.addNumbersToHistory(allNumbers);
                         
+                        // 高速化: 即座判定システム
                         const instantMatch = this.performInstantMatch(allNumbers);
                         if (instantMatch.matched) {
                             console.log('Instant match found:', instantMatch.number);
@@ -932,15 +922,18 @@
                 }
             }
 
+            // 高速化: 即座判定システム
             performInstantMatch(detectedNumbers) {
                 const numberCounts = {};
                 
+                // 番号の出現回数をカウント
                 detectedNumbers.forEach(number => {
-                    if (this.isValidNumber(number)) {
+                    if (number.length >= 4) { // 4桁以上のみ対象
                         numberCounts[number] = (numberCounts[number] || 0) + 1;
                     }
                 });
                 
+                // 2回以上出現する番号を即座に返却
                 for (const [number, count] of Object.entries(numberCounts)) {
                     if (count >= 2) {
                         return { matched: true, number: number };
@@ -950,17 +943,19 @@
                 return { matched: false };
             }
 
+            // 高速化: 候補番号の事前表示
             showCandidateNumbers(candidates) {
                 const detectedElement = document.getElementById('detectedNumbers');
                 if (detectedElement && candidates.length > 0) {
-                    const validCandidates = candidates.filter(n => this.isValidNumber(n));
+                    const validCandidates = candidates.filter(n => n.length >= 4);
                     if (validCandidates.length > 0) {
-                        detectedElement.textContent = `4桁候補: ${validCandidates.join(', ')}`;
+                        detectedElement.textContent = `候補: ${validCandidates.join(', ')}`;
                         detectedElement.className = 'status-value processing';
                     }
                 }
             }
 
+            // 高速化: プログレッシブステータス表示
             updateProgressiveStatus(message) {
                 const detectedElement = document.getElementById('detectedNumbers');
                 if (detectedElement) {
@@ -971,28 +966,24 @@
 
             addNumbersToHistory(numbers) {
                 const timestamp = new Date().toLocaleTimeString();
-                const validNumbers = numbers.filter(n => this.isValidNumber(n));
-                if (validNumbers.length > 0) {
-                    const historyEntry = `[${timestamp}] 4桁検出: ${validNumbers.join(', ')}`;
-                    
-                    this.detectionHistory.push(historyEntry);
-                    if (this.detectionHistory.length > this.maxHistoryLength) {
-                        this.detectionHistory.shift();
-                    }
-                    
-                    this.updateHistory();
+                const historyEntry = `[${timestamp}] 検出: ${numbers.join(', ')}`;
+                
+                this.detectionHistory.push(historyEntry);
+                if (this.detectionHistory.length > this.maxHistoryLength) {
+                    this.detectionHistory.shift();
                 }
+                
+                this.updateHistory();
             }
 
-            extractValidNumbers(text) {
-                const numberPattern = /\d{4}/g;
+            extractAllNumbers(text) {
+                const numberPattern = /\d{3,12}/g;
                 const matches = text.match(numberPattern) || [];
                 
-                const validNumbers = matches.filter(num => this.isValidNumber(num));
-                const uniqueNumbers = [...new Set(validNumbers)];
+                const uniqueNumbers = [...new Set(matches)];
                 
                 if (uniqueNumbers.length > 0) {
-                    console.log('検出された4桁番号:', uniqueNumbers);
+                    console.log('検出された番号:', uniqueNumbers);
                 }
                 
                 return uniqueNumbers;
@@ -1002,13 +993,11 @@
                 const duplicates = [];
                 
                 for (const number of numbers) {
-                    if (this.isValidNumber(number)) {
-                        const regex = new RegExp(number, 'g');
-                        const matches = (originalText.match(regex) || []).length;
-                        
-                        if (matches >= 2) {
-                            duplicates.push(number);
-                        }
+                    const regex = new RegExp(number, 'g');
+                    const matches = (originalText.match(regex) || []).length;
+                    
+                    if (matches >= 2 && number.length >= 4) {
+                        duplicates.push(number);
                     }
                 }
                 
@@ -1063,6 +1052,7 @@
             handleDuplicateDetection(duplicates) {
                 this.isMatched = true;
                 
+                // 高速化: 即座に結果表示
                 this.updateProgressiveStatus('🎉 照合完了！');
                 
                 const detectedElement = document.getElementById('detectedNumbers');
@@ -1075,15 +1065,17 @@
                 const duplicateNumbers = document.getElementById('duplicateNumbers');
                 
                 if (duplicateResult) duplicateResult.style.display = 'block';
-                if (duplicateNumbers) duplicateNumbers.textContent = `4桁番号: ${duplicates[0]}`;
+                if (duplicateNumbers) duplicateNumbers.textContent = `番号: ${duplicates[0]}`;
                 
+                // 結果を履歴に記録
                 const timestamp = new Date().toLocaleTimeString();
-                this.detectionHistory.push(`[${timestamp}] ✅ 4桁照合完了: ${duplicates[0]}`);
+                this.detectionHistory.push(`[${timestamp}] ✅ 照合完了: ${duplicates[0]}`);
                 this.updateHistory();
                 
+                // スキャンを自動停止
                 this.stopScanning();
                 
-                console.log('4-digit duplicate detection completed');
+                console.log('Duplicate detection completed in optimized mode');
             }
 
             getStableNumber() {
@@ -1092,15 +1084,13 @@
                 const latest = this.detectionHistory[this.detectionHistory.length - 1];
                 const secondLatest = this.detectionHistory[this.detectionHistory.length - 2];
                 
-                if (latest === secondLatest && this.isValidNumber(latest)) {
+                if (latest === secondLatest) {
                     return latest;
                 }
 
                 const counts = {};
                 this.detectionHistory.forEach(num => {
-                    if (this.isValidNumber(num)) {
-                        counts[num] = (counts[num] || 0) + 1;
-                    }
+                    counts[num] = (counts[num] || 0) + 1;
                 });
 
                 const maxCount = Math.max(...Object.values(counts));
@@ -1115,7 +1105,7 @@
                 const historyList = document.getElementById('historyList');
                 if (historyList) {
                     if (this.detectionHistory.length === 0) {
-                        historyList.innerHTML = '<div class="history-item">まだ4桁番号の検出履歴がありません</div>';
+                        historyList.innerHTML = '<div class="history-item">まだ検出履歴がありません</div>';
                     } else {
                         historyList.innerHTML = this.detectionHistory
                             .slice(-5)
@@ -1135,11 +1125,11 @@
 
                 if (isMatch) {
                     if (matchResult) matchResult.classList.add('matched');
-                    if (matchStatus) matchStatus.textContent = '4桁番号照合完了';
+                    if (matchStatus) matchStatus.textContent = '照合完了';
                     if (matchIcon) matchIcon.textContent = '✅';
                 } else {
                     if (matchResult) matchResult.classList.add('unmatched');
-                    if (matchStatus) matchStatus.textContent = '4桁番号不一致';
+                    if (matchStatus) matchStatus.textContent = '番号不一致';
                     if (matchIcon) matchIcon.textContent = '❌';
                 }
             }
@@ -1171,7 +1161,7 @@
                     const secondElement = document.getElementById('secondNumber');
 
                     if (currentElement) {
-                        currentElement.textContent = '----';
+                        currentElement.textContent = '---';
                         currentElement.className = 'status-value pending';
                     }
                     if (firstElement) {
