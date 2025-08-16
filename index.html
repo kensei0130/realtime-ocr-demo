@@ -567,20 +567,70 @@
             }
 
             async initCamera() {
-                const constraints = {
-                    video: {
-                        facingMode: 'environment',
-                        width: { ideal: 1280 },
-                        height: { ideal: 720 }
+                console.log('Initializing camera...');
+                
+                // 複数の制約を試行
+                const constraintSets = [
+                    // 最初に試行: 高品質設定
+                    {
+                        video: {
+                            facingMode: 'environment',
+                            width: { ideal: 1280 },
+                            height: { ideal: 720 }
+                        }
+                    },
+                    // 2回目: 中品質設定
+                    {
+                        video: {
+                            facingMode: 'environment',
+                            width: { ideal: 640 },
+                            height: { ideal: 480 }
+                        }
+                    },
+                    // 3回目: 基本設定
+                    {
+                        video: {
+                            facingMode: 'environment'
+                        }
+                    },
+                    // 4回目: フォールバック（前面カメラも許可）
+                    {
+                        video: true
                     }
-                };
+                ];
 
-                try {
-                    this.stream = await navigator.mediaDevices.getUserMedia(constraints);
-                    this.video.srcObject = this.stream;
-                    await new Promise(resolve => this.video.onloadedmetadata = resolve);
-                } catch (error) {
-                    throw new Error('カメラアクセスに失敗しました。ブラウザでカメラの使用を許可してください。');
+                for (let i = 0; i < constraintSets.length; i++) {
+                    try {
+                        console.log(`Trying camera constraint set ${i + 1}:`, constraintSets[i]);
+                        
+                        this.stream = await navigator.mediaDevices.getUserMedia(constraintSets[i]);
+                        this.video.srcObject = this.stream;
+                        
+                        // メタデータ読み込み待機（タイムアウト付き）
+                        await Promise.race([
+                            new Promise(resolve => this.video.onloadedmetadata = resolve),
+                            new Promise((_, reject) => setTimeout(() => reject(new Error('Metadata timeout')), 10000))
+                        ]);
+                        
+                        console.log('Camera initialized successfully with constraint set', i + 1);
+                        console.log('Video dimensions:', this.video.videoWidth, 'x', this.video.videoHeight);
+                        
+                        return; // 成功したら終了
+                        
+                    } catch (error) {
+                        console.log(`Camera constraint set ${i + 1} failed:`, error.message);
+                        
+                        // ストリームをクリーンアップ
+                        if (this.stream) {
+                            this.stream.getTracks().forEach(track => track.stop());
+                            this.stream = null;
+                        }
+                        
+                        // 最後の試行でも失敗した場合はエラーを投げる
+                        if (i === constraintSets.length - 1) {
+                            throw new Error(`カメラアクセスに失敗しました。全ての設定を試行しましたが、カメラを開始できません。ブラウザでカメラの使用を許可し、HTTPSでアクセスしてください。最後のエラー: ${error.message}`);
+                        }
+                    }
                 }
             }
 
