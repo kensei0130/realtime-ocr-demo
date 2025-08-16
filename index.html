@@ -521,11 +521,23 @@
     <canvas id="canvas" style="display: none;"></canvas>
 
     <script>
+        // 最初にコンソールログで動作確認
+        console.log('Script loaded at:', new Date().toISOString());
+        
+        // DOMContentLoaded前にも基本チェック
+        console.log('navigator.mediaDevices available:', !!navigator.mediaDevices);
+        console.log('getUserMedia available:', !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia));
+        console.log('Current protocol:', location.protocol);
+        console.log('Tesseract available:', typeof Tesseract !== 'undefined');
+
         class ChartNumberScanner {
             constructor() {
-                this.video = document.getElementById('video');
-                this.canvas = document.getElementById('canvas');
-                this.ctx = this.canvas.getContext('2d');
+                console.log('ChartNumberScanner constructor called');
+                
+                // DOM要素の取得を安全に
+                this.video = null;
+                this.canvas = null;
+                this.ctx = null;
                 this.worker = null;
                 this.stream = null;
                 this.isProcessing = false;
@@ -552,18 +564,87 @@
                     isWaitingForSelection: false
                 };
                 
-                this.init();
+                // DOM要素を初期化してから開始
+                this.initDOM();
+            }
+
+            initDOM() {
+                console.log('Initializing DOM elements...');
+                
+                try {
+                    this.video = document.getElementById('video');
+                    this.canvas = document.getElementById('canvas');
+                    
+                    if (!this.video) {
+                        throw new Error('Video element not found');
+                    }
+                    if (!this.canvas) {
+                        throw new Error('Canvas element not found');
+                    }
+                    
+                    this.ctx = this.canvas.getContext('2d');
+                    
+                    console.log('DOM elements initialized successfully');
+                    
+                    // 少し遅延してから初期化開始
+                    setTimeout(() => {
+                        this.init();
+                    }, 100);
+                    
+                } catch (error) {
+                    console.error('DOM initialization failed:', error);
+                    this.showError('DOM要素の初期化に失敗しました: ' + error.message);
+                }
             }
 
             async init() {
+                console.log('=== INIT START ===');
+                
                 try {
+                    // 基本的な環境チェック
+                    console.log('1. Environment check...');
+                    this.checkEnvironment();
+                    
+                    console.log('2. Starting camera initialization...');
                     await this.initCamera();
+                    
+                    console.log('3. Starting Tesseract initialization...');
                     await this.initTesseract();
+                    
+                    console.log('4. Setting up event listeners...');
                     this.setupEventListeners();
+                    
+                    console.log('5. Hiding loading screen...');
                     this.hideLoading();
+                    
+                    console.log('=== INIT COMPLETE ===');
+                    
                 } catch (error) {
+                    console.error('=== INIT FAILED ===', error);
                     this.showError('初期化に失敗しました: ' + error.message);
                 }
+            }
+
+            checkEnvironment() {
+                console.log('Checking environment...');
+                
+                // Tesseract.js の確認
+                if (typeof Tesseract === 'undefined') {
+                    throw new Error('Tesseract.jsが読み込まれていません。インターネット接続を確認してください。');
+                }
+                console.log('✓ Tesseract.js loaded');
+                
+                // MediaDevices API の確認
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    throw new Error('このブラウザはカメラアクセスをサポートしていません。Chrome、Firefox、Safari等の最新ブラウザをご使用ください。');
+                }
+                console.log('✓ MediaDevices API available');
+                
+                // HTTPS チェック
+                if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+                    console.warn('⚠ HTTP環境です。カメラアクセスに制限がある可能性があります。');
+                }
+                console.log('✓ Protocol check passed');
             }
 
             async initCamera() {
@@ -635,30 +716,51 @@
             }
 
             async initTesseract() {
-                this.worker = await Tesseract.createWorker('jpn+eng', 1, {
-                    logger: m => {
-                        if (m.status === 'recognizing text') {
-                            if (this.scanMode === 'multi') {
-                                const currentElement = document.getElementById('currentDetected');
-                                if (currentElement) {
-                                    currentElement.textContent = '処理中...';
-                                    currentElement.className = 'status-value processing';
+                try {
+                    console.log('Initializing Tesseract...');
+                    
+                    // タイムアウト付きでTesseractワーカーを作成
+                    this.worker = await Promise.race([
+                        Tesseract.createWorker('jpn+eng', 1, {
+                            logger: m => {
+                                if (m.status === 'loading frugally-xhr') {
+                                    console.log('Tesseract loading:', m.progress);
                                 }
-                            } else {
-                                const detectedElement = document.getElementById('detectedNumbers');
-                                if (detectedElement) {
-                                    detectedElement.textContent = '処理中...';
-                                    detectedElement.className = 'status-value processing';
+                                if (m.status === 'recognizing text') {
+                                    if (this.scanMode === 'multi') {
+                                        const currentElement = document.getElementById('currentDetected');
+                                        if (currentElement) {
+                                            currentElement.textContent = '処理中...';
+                                            currentElement.className = 'status-value processing';
+                                        }
+                                    } else {
+                                        const detectedElement = document.getElementById('detectedNumbers');
+                                        if (detectedElement) {
+                                            detectedElement.textContent = '処理中...';
+                                            detectedElement.className = 'status-value processing';
+                                        }
+                                    }
                                 }
                             }
-                        }
-                    }
-                });
+                        }),
+                        new Promise((_, reject) => 
+                            setTimeout(() => reject(new Error('Tesseract initialization timeout')), 30000)
+                        )
+                    ]);
 
-                await this.worker.setParameters({
-                    tessedit_char_whitelist: '0123456789',
-                    tessedit_pageseg_mode: Tesseract.PSM.SINGLE_BLOCK,
-                });
+                    console.log('Tesseract worker created, setting parameters...');
+                    
+                    await this.worker.setParameters({
+                        tessedit_char_whitelist: '0123456789',
+                        tessedit_pageseg_mode: Tesseract.PSM.SINGLE_BLOCK,
+                    });
+                    
+                    console.log('Tesseract initialized successfully');
+                    
+                } catch (error) {
+                    console.error('Tesseract initialization failed:', error);
+                    throw new Error(`OCRエンジンの初期化に失敗しました: ${error.message}`);
+                }
             }
 
             setupEventListeners() {
@@ -837,16 +939,46 @@
             }
 
             showError(message) {
+                console.error('showError called:', message);
+                
                 const loading = document.getElementById('loading');
                 const errorDiv = document.getElementById('error');
                 const retryBtn = document.getElementById('retryBtn');
 
-                if (loading) loading.style.display = 'none';
-                if (errorDiv) {
-                    errorDiv.textContent = message;
-                    errorDiv.style.display = 'block';
+                console.log('Loading element:', loading);
+                console.log('Error div element:', errorDiv);
+                console.log('Retry button element:', retryBtn);
+
+                if (loading) {
+                    loading.style.display = 'none';
+                    console.log('Loading hidden');
                 }
-                if (retryBtn) retryBtn.style.display = 'inline-block';
+                
+                if (errorDiv) {
+                    errorDiv.innerHTML = `
+                        <strong>エラーが発生しました</strong><br>
+                        ${message}<br><br>
+                        <strong>対処方法:</strong><br>
+                        • ブラウザでカメラアクセスを許可してください<br>
+                        • HTTPSでアクセスしてください（http://→https://）<br>
+                        • Chrome、Firefox、Safari等の最新ブラウザをご使用ください<br>
+                        • ページを再読み込みしてみてください<br><br>
+                        <strong>技術情報:</strong><br>
+                        • Protocol: ${location.protocol}<br>
+                        • UserAgent: ${navigator.userAgent.substring(0, 100)}...
+                    `;
+                    errorDiv.style.display = 'block';
+                    console.log('Error message displayed');
+                } else {
+                    console.error('Error div not found!');
+                }
+                
+                if (retryBtn) {
+                    retryBtn.style.display = 'inline-block';
+                    console.log('Retry button shown');
+                } else {
+                    console.error('Retry button not found!');
+                }
             }
 
             async startScanning() {
