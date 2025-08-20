@@ -73,9 +73,9 @@
             aspect-ratio: 16/9;
         }
 
-        /* 連続スキャンモード用の上下反転 */
+        /* 連続スキャンモード用（反転なし） */
         #video.flipped {
-            transform: rotate(180deg);
+            /* 反転を削除 */
         }
 
         .guide-overlay {
@@ -114,11 +114,10 @@
             white-space: nowrap;
         }
 
-        /* 連続スキャンモード用のガイドフレーム調整 */
+        /* 連続スキャンモード用のガイドフレーム調整（反転なし） */
         .guide-frame.flipped::before {
-            content: '上下反転モード';
-            top: 100%;
-            margin-top: 5px;
+            content: '連続スキャンモード';
+            top: -20px;
         }
 
         .controls {
@@ -457,7 +456,7 @@
             </div>
 
             <div id="continuousScanInfo" class="continuous-scan-info" style="display: none;">
-                🔄 連続スキャンモード（上下反転）- 一致検出後もスキャンを継続します。リセットで停止。
+                🔄 連続スキャンモード - 一致検出後もスキャンを継続します。リセットで停止。
             </div>
 
             <div id="scanCounter" class="scan-counter" style="display: none;">
@@ -707,7 +706,7 @@
                     if (scanCounter) scanCounter.style.display = 'block';
                     if (continuousResults) continuousResults.style.display = 'block';
                     
-                    // 連続スキャンモードでは上下反転
+                    // 連続スキャンモードでは通常表示（反転なし）
                     video.classList.add('flipped');
                     guideFrame.classList.add('flipped');
                 } else {
@@ -872,16 +871,8 @@
                 this.canvas.width = videoWidth;
                 this.canvas.height = videoHeight;
                 
-                // 連続スキャンモードでは画像を上下反転
-                if (this.scanMode === 'continuous') {
-                    this.ctx.save();
-                    this.ctx.translate(videoWidth / 2, videoHeight / 2);
-                    this.ctx.rotate(Math.PI);
-                    this.ctx.drawImage(this.video, -videoWidth / 2, -videoHeight / 2, videoWidth, videoHeight);
-                    this.ctx.restore();
-                } else {
-                    this.ctx.drawImage(this.video, 0, 0, videoWidth, videoHeight);
-                }
+                // 連続スキャンモードでも通常の描画（反転なし）
+                this.ctx.drawImage(this.video, 0, 0, videoWidth, videoHeight);
                 
                 if (this.scanMode === 'single' || this.scanMode === 'continuous') {
                     return this.ctx.getImageData(0, 0, videoWidth, videoHeight);
