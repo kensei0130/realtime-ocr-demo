@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -74,6 +73,11 @@
             aspect-ratio: 16/9;
         }
 
+        /* 連続スキャンモード用の上下反転 */
+        #video.flipped {
+            transform: rotate(180deg);
+        }
+
         .guide-overlay {
             position: absolute;
             top: 0;
@@ -108,6 +112,13 @@
             border-radius: 10px;
             font-size: 0.6rem;
             white-space: nowrap;
+        }
+
+        /* 連続スキャンモード用のガイドフレーム調整 */
+        .guide-frame.flipped::before {
+            content: '上下反転モード';
+            top: 100%;
+            margin-top: 5px;
         }
 
         .controls {
@@ -206,6 +217,7 @@
             justify-content: center;
             gap: 0.5rem;
             margin-bottom: 1rem;
+            flex-wrap: wrap;
         }
 
         .mode-btn {
@@ -241,6 +253,16 @@
             color: #0c5aa6;
         }
 
+        .continuous-scan-info {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            padding: 0.8rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            font-size: 0.85rem;
+            color: #856404;
+        }
+
         .duplicate-result {
             background: #d4edda;
             border: 1px solid #c3e6cb;
@@ -248,6 +270,7 @@
             padding: 0.8rem;
             border-radius: 8px;
             margin-top: 0.5rem;
+            animation: fadeInScale 0.5s ease-out;
         }
 
         .duplicate-numbers {
@@ -256,10 +279,65 @@
             margin-top: 0.5rem;
         }
 
+        .continuous-results {
+            max-height: 300px;
+            overflow-y: auto;
+            margin-top: 1rem;
+        }
+
+        .continuous-result-item {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+            padding: 0.6rem;
+            border-radius: 6px;
+            margin-bottom: 0.5rem;
+            font-size: 0.85rem;
+            animation: slideInLeft 0.3s ease-out;
+        }
+
+        .continuous-result-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .result-timestamp {
+            font-size: 0.75rem;
+            color: #6c757d;
+            margin-bottom: 0.3rem;
+        }
+
+        .result-number {
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+            font-size: 1rem;
+        }
+
         @keyframes pulse {
             0% { transform: scale(1); }
             50% { transform: scale(1.02); }
             100% { transform: scale(1); }
+        }
+
+        @keyframes fadeInScale {
+            0% { 
+                opacity: 0;
+                transform: scale(0.9);
+            }
+            100% { 
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        @keyframes slideInLeft {
+            0% { 
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            100% { 
+                opacity: 1;
+                transform: translateX(0);
+            }
         }
 
         .match-icon {
@@ -328,6 +406,18 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+
+        .scan-counter {
+            background: #e7f3ff;
+            border: 1px solid #b3d9ff;
+            padding: 0.6rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            font-size: 0.85rem;
+            color: #0c5aa6;
+            text-align: center;
+            font-weight: 600;
+        }
     </style>
 </head>
 <body>
@@ -343,7 +433,7 @@
             <div id="videoContainer" class="video-wrapper" style="display: none;">
                 <video id="video" autoplay playsinline></video>
                 <div class="guide-overlay">
-                    <div class="guide-frame"></div>
+                    <div id="guideFrame" class="guide-frame"></div>
                 </div>
             </div>
 
@@ -359,10 +449,19 @@
             <div class="mode-selector">
                 <button id="singleModeBtn" class="mode-btn active">🔍 1回スキャン</button>
                 <button id="sequentialModeBtn" class="mode-btn">📋 2回スキャン</button>
+                <button id="continuousModeBtn" class="mode-btn">🔄 連続スキャン</button>
             </div>
 
             <div id="singleScanInfo" class="single-scan-info">
                 💡 1枚の用紙に記載された2つの同じカルテ番号を自動検出します
+            </div>
+
+            <div id="continuousScanInfo" class="continuous-scan-info" style="display: none;">
+                🔄 連続スキャンモード（上下反転）- 一致検出後もスキャンを継続します。リセットで停止。
+            </div>
+
+            <div id="scanCounter" class="scan-counter" style="display: none;">
+                📊 検出回数: <span id="matchCount">0</span>回
             </div>
 
             <div id="statusPanel" class="status-panel" style="display: none;">
@@ -388,6 +487,13 @@
                     </div>
                 </div>
 
+                <div id="continuousScanStatus" style="display: none;">
+                    <div class="status-item">
+                        <span class="status-label">現在の検出状況:</span>
+                        <span id="continuousDetectedNumbers" class="status-value pending">スキャン開始を押してください</span>
+                    </div>
+                </div>
+
                 <div id="matchResult" class="status-item" style="display: none;">
                     <span class="status-label">照合結果:</span>
                     <span class="status-value">
@@ -401,6 +507,10 @@
                     <div id="duplicateNumbers" class="duplicate-numbers"></div>
                 </div>
 
+                <div id="continuousResults" class="continuous-results" style="display: none;">
+                    <div id="continuousResultsList"></div>
+                </div>
+
                 <div class="history">
                     <strong>検出履歴:</strong>
                     <div id="historyList"></div>
@@ -410,7 +520,7 @@
     </div>
 
     <div class="footer">
-        📋 カルテ番号照合アプリ
+        📋 カルテ番号照合アプリ（3モード対応版）
     </div>
 
     <canvas id="canvas" style="display: none;"></canvas>
@@ -431,8 +541,12 @@
                 this.secondDetectedNumber = null;
                 this.isMatched = false;
                 
-                this.scanMode = 'single';
+                this.scanMode = 'single'; // 'single', 'sequential', 'continuous'
                 this.isScanning = false;
+                
+                // 連続スキャンモード用
+                this.continuousResults = [];
+                this.matchCount = 0;
                 
                 // 高速化用の変数
                 this.previousResults = [];
@@ -475,19 +589,7 @@
                 this.worker = await Tesseract.createWorker('jpn+eng', 1, {
                     logger: m => {
                         if (m.status === 'recognizing text') {
-                            if (this.scanMode === 'sequential') {
-                                const currentElement = document.getElementById('currentNumber');
-                                if (currentElement) {
-                                    currentElement.textContent = '処理中...';
-                                    currentElement.className = 'status-value processing';
-                                }
-                            } else {
-                                const detectedElement = document.getElementById('detectedNumbers');
-                                if (detectedElement) {
-                                    detectedElement.textContent = '処理中...';
-                                    detectedElement.className = 'status-value processing';
-                                }
-                            }
+                            this.updateProcessingStatus();
                         }
                     }
                 });
@@ -498,6 +600,28 @@
                 });
             }
 
+            updateProcessingStatus() {
+                if (this.scanMode === 'sequential') {
+                    const currentElement = document.getElementById('currentNumber');
+                    if (currentElement) {
+                        currentElement.textContent = '処理中...';
+                        currentElement.className = 'status-value processing';
+                    }
+                } else if (this.scanMode === 'continuous') {
+                    const detectedElement = document.getElementById('continuousDetectedNumbers');
+                    if (detectedElement) {
+                        detectedElement.textContent = '処理中...';
+                        detectedElement.className = 'status-value processing';
+                    }
+                } else {
+                    const detectedElement = document.getElementById('detectedNumbers');
+                    if (detectedElement) {
+                        detectedElement.textContent = '処理中...';
+                        detectedElement.className = 'status-value processing';
+                    }
+                }
+            }
+
             setupEventListeners() {
                 setTimeout(() => {
                     const resetBtn = document.getElementById('resetBtn');
@@ -506,36 +630,34 @@
                     const stopScanBtn = document.getElementById('stopScanBtn');
                     const sequentialModeBtn = document.getElementById('sequentialModeBtn');
                     const singleModeBtn = document.getElementById('singleModeBtn');
+                    const continuousModeBtn = document.getElementById('continuousModeBtn');
 
                     if (resetBtn) {
                         resetBtn.addEventListener('click', () => this.reset());
-                        console.log('Reset button event listener added');
                     }
                     if (retryBtn) {
                         retryBtn.addEventListener('click', () => this.retry());
-                        console.log('Retry button event listener added');
                     }
                     if (startScanBtn) {
                         startScanBtn.addEventListener('click', () => this.startScanning());
-                        console.log('Start scan button event listener added');
                     }
                     if (stopScanBtn) {
                         stopScanBtn.addEventListener('click', () => this.stopScanning());
-                        console.log('Stop scan button event listener added');
                     }
                     if (sequentialModeBtn) {
                         sequentialModeBtn.addEventListener('click', () => {
-                            console.log('Sequential mode button clicked');
                             this.switchMode('sequential');
                         });
-                        console.log('Sequential mode button event listener added');
                     }
                     if (singleModeBtn) {
                         singleModeBtn.addEventListener('click', () => {
-                            console.log('Single mode button clicked');
                             this.switchMode('single');
                         });
-                        console.log('Single mode button event listener added');
+                    }
+                    if (continuousModeBtn) {
+                        continuousModeBtn.addEventListener('click', () => {
+                            this.switchMode('continuous');
+                        });
                     }
                 }, 100);
             }
@@ -548,49 +670,56 @@
                 const allModeButtons = document.querySelectorAll('.mode-btn');
                 allModeButtons.forEach(btn => {
                     btn.classList.remove('active');
-                    console.log('Removed active class from button:', btn.textContent);
                 });
                 
                 const sequentialStatus = document.getElementById('sequentialStatus');
                 const singleScanStatus = document.getElementById('singleScanStatus');
+                const continuousScanStatus = document.getElementById('continuousScanStatus');
                 const singleScanInfo = document.getElementById('singleScanInfo');
+                const continuousScanInfo = document.getElementById('continuousScanInfo');
+                const scanCounter = document.getElementById('scanCounter');
+                const continuousResults = document.getElementById('continuousResults');
+                const video = document.getElementById('video');
+                const guideFrame = document.getElementById('guideFrame');
+                
+                // ビデオとガイドフレームの反転リセット
+                video.classList.remove('flipped');
+                guideFrame.classList.remove('flipped');
                 
                 if (mode === 'sequential') {
                     const sequentialBtn = document.getElementById('sequentialModeBtn');
-                    if (sequentialBtn) {
-                        sequentialBtn.classList.add('active');
-                        console.log('Added active class to sequential button');
-                    }
-                    if (sequentialStatus) {
-                        sequentialStatus.style.display = 'block';
-                        console.log('Showing sequential status');
-                    }
-                    if (singleScanStatus) {
-                        singleScanStatus.style.display = 'none';
-                        console.log('Hiding single scan status');
-                    }
-                    if (singleScanInfo) {
-                        singleScanInfo.style.display = 'none';
-                        console.log('Hiding single scan info');
-                    }
+                    if (sequentialBtn) sequentialBtn.classList.add('active');
+                    if (sequentialStatus) sequentialStatus.style.display = 'block';
+                    if (singleScanStatus) singleScanStatus.style.display = 'none';
+                    if (continuousScanStatus) continuousScanStatus.style.display = 'none';
+                    if (singleScanInfo) singleScanInfo.style.display = 'none';
+                    if (continuousScanInfo) continuousScanInfo.style.display = 'none';
+                    if (scanCounter) scanCounter.style.display = 'none';
+                    if (continuousResults) continuousResults.style.display = 'none';
+                } else if (mode === 'continuous') {
+                    const continuousBtn = document.getElementById('continuousModeBtn');
+                    if (continuousBtn) continuousBtn.classList.add('active');
+                    if (sequentialStatus) sequentialStatus.style.display = 'none';
+                    if (singleScanStatus) singleScanStatus.style.display = 'none';
+                    if (continuousScanStatus) continuousScanStatus.style.display = 'block';
+                    if (singleScanInfo) singleScanInfo.style.display = 'none';
+                    if (continuousScanInfo) continuousScanInfo.style.display = 'block';
+                    if (scanCounter) scanCounter.style.display = 'block';
+                    if (continuousResults) continuousResults.style.display = 'block';
+                    
+                    // 連続スキャンモードでは上下反転
+                    video.classList.add('flipped');
+                    guideFrame.classList.add('flipped');
                 } else {
                     const singleBtn = document.getElementById('singleModeBtn');
-                    if (singleBtn) {
-                        singleBtn.classList.add('active');
-                        console.log('Added active class to single button');
-                    }
-                    if (sequentialStatus) {
-                        sequentialStatus.style.display = 'none';
-                        console.log('Hiding sequential status');
-                    }
-                    if (singleScanStatus) {
-                        singleScanStatus.style.display = 'block';
-                        console.log('Showing single scan status');
-                    }
-                    if (singleScanInfo) {
-                        singleScanInfo.style.display = 'block';
-                        console.log('Showing single scan info');
-                    }
+                    if (singleBtn) singleBtn.classList.add('active');
+                    if (sequentialStatus) sequentialStatus.style.display = 'none';
+                    if (singleScanStatus) singleScanStatus.style.display = 'block';
+                    if (continuousScanStatus) continuousScanStatus.style.display = 'none';
+                    if (singleScanInfo) singleScanInfo.style.display = 'block';
+                    if (continuousScanInfo) continuousScanInfo.style.display = 'none';
+                    if (scanCounter) scanCounter.style.display = 'none';
+                    if (continuousResults) continuousResults.style.display = 'none';
                 }
                 
                 console.log('Mode switch completed. Current mode:', this.scanMode);
@@ -614,51 +743,24 @@
             }
 
             ensureModeButtonEvents() {
-                const sequentialModeBtn = document.getElementById('sequentialModeBtn');
-                const singleModeBtn = document.getElementById('singleModeBtn');
-                const startScanBtn = document.getElementById('startScanBtn');
-                const stopScanBtn = document.getElementById('stopScanBtn');
-                
-                if (sequentialModeBtn && !sequentialModeBtn.hasAttribute('data-listener-added')) {
-                    sequentialModeBtn.addEventListener('click', (e) => {
-                        e.preventDefault();
-                        console.log('Sequential mode clicked (direct)');
-                        this.switchMode('sequential');
-                    });
-                    sequentialModeBtn.setAttribute('data-listener-added', 'true');
-                    console.log('Sequential button listener ensured');
-                }
-                
-                if (singleModeBtn && !singleModeBtn.hasAttribute('data-listener-added')) {
-                    singleModeBtn.addEventListener('click', (e) => {
-                        e.preventDefault();
-                        console.log('Single mode clicked (direct)');
-                        this.switchMode('single');
-                    });
-                    singleModeBtn.setAttribute('data-listener-added', 'true');
-                    console.log('Single button listener ensured');
-                }
+                const buttons = [
+                    { id: 'sequentialModeBtn', action: () => this.switchMode('sequential') },
+                    { id: 'singleModeBtn', action: () => this.switchMode('single') },
+                    { id: 'continuousModeBtn', action: () => this.switchMode('continuous') },
+                    { id: 'startScanBtn', action: () => this.startScanning() },
+                    { id: 'stopScanBtn', action: () => this.stopScanning() }
+                ];
 
-                if (startScanBtn && !startScanBtn.hasAttribute('data-listener-added')) {
-                    startScanBtn.addEventListener('click', (e) => {
-                        e.preventDefault();
-                        this.startScanning();
-                    });
-                    startScanBtn.setAttribute('data-listener-added', 'true');
-                    console.log('Start scan button listener ensured');
-                }
-
-                if (stopScanBtn && !stopScanBtn.hasAttribute('data-listener-added')) {
-                    stopScanBtn.addEventListener('click', (e) => {
-                        e.preventDefault();
-                        // 高速化用変数もリセット
-                this.previousResults = [];
-
-                this.stopScanning();
-                    });
-                    stopScanBtn.setAttribute('data-listener-added', 'true');
-                    console.log('Stop scan button listener ensured');
-                }
+                buttons.forEach(({ id, action }) => {
+                    const btn = document.getElementById(id);
+                    if (btn && !btn.hasAttribute('data-listener-added')) {
+                        btn.addEventListener('click', (e) => {
+                            e.preventDefault();
+                            action();
+                        });
+                        btn.setAttribute('data-listener-added', 'true');
+                    }
+                });
             }
 
             showError(message) {
@@ -676,7 +778,7 @@
 
             async startScanning() {
                 this.isScanning = true;
-                console.log('Scanning started');
+                console.log('Scanning started in mode:', this.scanMode);
                 
                 const startBtn = document.getElementById('startScanBtn');
                 const stopBtn = document.getElementById('stopScanBtn');
@@ -694,21 +796,27 @@
                 const stopBtn = document.getElementById('stopScanBtn');
                 if (startBtn) startBtn.style.display = 'inline-block';
                 if (stopBtn) stopBtn.style.display = 'none';
+                
+                // 高速化用変数もリセット
+                this.previousResults = [];
             }
 
             scanLoop() {
-                if (!this.isScanning || this.isMatched) return;
+                if (!this.isScanning) return;
                 
-                // 高速化: スキャン間隔を2.5秒から1.5秒に短縮（高速判定により負荷軽減）
+                // 連続スキャンモードでは一致検出後もスキャンを継続
+                if (this.isMatched && this.scanMode !== 'continuous') return;
+                
                 setTimeout(() => {
                     this.captureAndProcess().then(() => {
                         this.scanLoop();
                     });
-                }, 1500); // 高速化: 2500ms → 1500ms
+                }, 1500);
             }
 
             async captureAndProcess() {
-                if (this.isProcessing || this.isMatched) return;
+                if (this.isProcessing) return;
+                if (this.isMatched && this.scanMode !== 'continuous') return;
 
                 this.isProcessing = true;
 
@@ -719,9 +827,20 @@
                     const processedImage = this.preprocessImage(imageData);
                     
                     if (this.scanMode === 'sequential') {
-                        const number = await this.performTieredOCR(processedImage); // 高速化: 段階的OCR
+                        const number = await this.performTieredOCR(processedImage);
                         if (number) {
                             this.handleSequentialDetection(number);
+                        }
+                    } else if (this.scanMode === 'continuous') {
+                        const duplicates = await this.performDuplicateDetection(processedImage);
+                        if (duplicates.length > 0) {
+                            this.handleContinuousDetection(duplicates);
+                        } else {
+                            const detectedElement = document.getElementById('continuousDetectedNumbers');
+                            if (detectedElement) {
+                                detectedElement.textContent = 'スキャン中...（番号を検出中）';
+                                detectedElement.className = 'status-value pending';
+                            }
                         }
                     } else {
                         const duplicates = await this.performDuplicateDetection(processedImage);
@@ -753,23 +872,29 @@
                 this.canvas.width = videoWidth;
                 this.canvas.height = videoHeight;
                 
-                this.ctx.drawImage(this.video, 0, 0, videoWidth, videoHeight);
+                // 連続スキャンモードでは画像を上下反転
+                if (this.scanMode === 'continuous') {
+                    this.ctx.save();
+                    this.ctx.translate(videoWidth / 2, videoHeight / 2);
+                    this.ctx.rotate(Math.PI);
+                    this.ctx.drawImage(this.video, -videoWidth / 2, -videoHeight / 2, videoWidth, videoHeight);
+                    this.ctx.restore();
+                } else {
+                    this.ctx.drawImage(this.video, 0, 0, videoWidth, videoHeight);
+                }
                 
-                if (this.scanMode === 'single') {
+                if (this.scanMode === 'single' || this.scanMode === 'continuous') {
                     return this.ctx.getImageData(0, 0, videoWidth, videoHeight);
                 } else {
-                    // 高速化: ROI動的最適化
                     const roi = this.getOptimizedROI(videoWidth, videoHeight);
                     return this.ctx.getImageData(roi.x, roi.y, roi.width, roi.height);
                 }
             }
 
             getOptimizedROI(videoWidth, videoHeight) {
-                // 前回検出結果がある場合は範囲を最適化
                 if (this.previousResults.length > 0) {
                     const lastResult = this.previousResults[this.previousResults.length - 1];
                     if (lastResult.roi) {
-                        // 前回検出位置周辺に絞り込み（25%縮小）
                         return {
                             width: lastResult.roi.width * 0.75,
                             height: lastResult.roi.height * 0.75,
@@ -779,7 +904,6 @@
                     }
                 }
                 
-                // 標準ROI
                 const frameWidth = videoWidth * 0.7;
                 const frameHeight = Math.min(videoHeight * 0.08, 60);
                 return {
@@ -819,11 +943,9 @@
                 return numbers.length >= 3 ? numbers : null;
             }
 
-            // 高速化: 段階的解像度処理
             async performTieredOCR(imageData) {
                 if (!imageData || !this.worker) return null;
 
-                // Step 1: 高速プリスキャン（50%縮小）
                 if (this.quickScanEnabled) {
                     const quickResult = await this.quickPreScan(imageData);
                     if (quickResult && quickResult.confidence > this.confidenceThreshold) {
@@ -832,13 +954,11 @@
                     }
                 }
 
-                // Step 2: 標準スキャン
                 return await this.performOCR(imageData);
             }
 
             async quickPreScan(imageData) {
                 try {
-                    // 画像を50%に縮小
                     const scaledImageData = this.scaleDownImage(imageData, 0.5);
                     
                     this.canvas.width = scaledImageData.width;
@@ -851,7 +971,7 @@
                     if (numbers.length >= 3) {
                         return {
                             text: numbers,
-                            confidence: confidence / 100 // 0-1の範囲に正規化
+                            confidence: confidence / 100
                         };
                     }
                     
@@ -877,10 +997,10 @@
                         const origIndex = (origY * width + origX) * 4;
                         const newIndex = (y * newWidth + x) * 4;
                         
-                        newData[newIndex] = data[origIndex];         // R
-                        newData[newIndex + 1] = data[origIndex + 1]; // G
-                        newData[newIndex + 2] = data[origIndex + 2]; // B
-                        newData[newIndex + 3] = data[origIndex + 3]; // A
+                        newData[newIndex] = data[origIndex];
+                        newData[newIndex + 1] = data[origIndex + 1];
+                        newData[newIndex + 2] = data[origIndex + 2];
+                        newData[newIndex + 3] = data[origIndex + 3];
                     }
                 }
                 
@@ -895,18 +1015,17 @@
                 this.ctx.putImageData(imageData, 0, 0);
                 
                 try {
-                    // 高速化: プログレッシブ表示
-                    this.updateProgressiveStatus('🔍 解析中...');
+                    if (this.scanMode === 'continuous') {
+                        this.updateProgressiveStatus('🔍 解析中...');
+                    }
                     
                     const { data: { text, words } } = await this.worker.recognize(this.canvas);
                     const allNumbers = this.extractAllNumbers(text);
                     
                     if (allNumbers.length > 0) {
-                        // 高速化: 候補番号の事前表示
                         this.showCandidateNumbers(allNumbers);
                         this.addNumbersToHistory(allNumbers);
                         
-                        // 高速化: 即座判定システム
                         const instantMatch = this.performInstantMatch(allNumbers);
                         if (instantMatch.matched) {
                             console.log('Instant match found:', instantMatch.number);
@@ -914,7 +1033,9 @@
                         }
                     }
                     
-                    this.updateProgressiveStatus('✅ 照合中...');
+                    if (this.scanMode === 'continuous') {
+                        this.updateProgressiveStatus('✅ 照合中...');
+                    }
                     return this.findDuplicates(allNumbers, text);
                 } catch (error) {
                     console.error('重複検出エラー:', error);
@@ -922,18 +1043,15 @@
                 }
             }
 
-            // 高速化: 即座判定システム
             performInstantMatch(detectedNumbers) {
                 const numberCounts = {};
                 
-                // 番号の出現回数をカウント
                 detectedNumbers.forEach(number => {
-                    if (number.length >= 4) { // 4桁以上のみ対象
+                    if (number.length >= 4) {
                         numberCounts[number] = (numberCounts[number] || 0) + 1;
                     }
                 });
                 
-                // 2回以上出現する番号を即座に返却
                 for (const [number, count] of Object.entries(numberCounts)) {
                     if (count >= 2) {
                         return { matched: true, number: number };
@@ -943,9 +1061,11 @@
                 return { matched: false };
             }
 
-            // 高速化: 候補番号の事前表示
             showCandidateNumbers(candidates) {
-                const detectedElement = document.getElementById('detectedNumbers');
+                const detectedElement = this.scanMode === 'continuous' ? 
+                    document.getElementById('continuousDetectedNumbers') : 
+                    document.getElementById('detectedNumbers');
+                    
                 if (detectedElement && candidates.length > 0) {
                     const validCandidates = candidates.filter(n => n.length >= 4);
                     if (validCandidates.length > 0) {
@@ -955,9 +1075,11 @@
                 }
             }
 
-            // 高速化: プログレッシブステータス表示
             updateProgressiveStatus(message) {
-                const detectedElement = document.getElementById('detectedNumbers');
+                const detectedElement = this.scanMode === 'continuous' ? 
+                    document.getElementById('continuousDetectedNumbers') : 
+                    document.getElementById('detectedNumbers');
+                    
                 if (detectedElement) {
                     detectedElement.textContent = message;
                     detectedElement.className = 'status-value processing';
@@ -1052,7 +1174,6 @@
             handleDuplicateDetection(duplicates) {
                 this.isMatched = true;
                 
-                // 高速化: 即座に結果表示
                 this.updateProgressiveStatus('🎉 照合完了！');
                 
                 const detectedElement = document.getElementById('detectedNumbers');
@@ -1067,15 +1188,84 @@
                 if (duplicateResult) duplicateResult.style.display = 'block';
                 if (duplicateNumbers) duplicateNumbers.textContent = `番号: ${duplicates[0]}`;
                 
-                // 結果を履歴に記録
                 const timestamp = new Date().toLocaleTimeString();
                 this.detectionHistory.push(`[${timestamp}] ✅ 照合完了: ${duplicates[0]}`);
                 this.updateHistory();
                 
-                // スキャンを自動停止
                 this.stopScanning();
                 
                 console.log('Duplicate detection completed in optimized mode');
+            }
+
+            handleContinuousDetection(duplicates) {
+                // 連続スキャンモードでは一致検出後もスキャンを継続
+                this.matchCount++;
+                
+                const detectedElement = document.getElementById('continuousDetectedNumbers');
+                if (detectedElement) {
+                    detectedElement.textContent = `✅ ${duplicates.join(', ')}`;
+                    detectedElement.className = 'status-value detected';
+                }
+                
+                // マッチカウンターを更新
+                const matchCountElement = document.getElementById('matchCount');
+                if (matchCountElement) {
+                    matchCountElement.textContent = this.matchCount;
+                }
+                
+                // 連続結果リストに追加
+                const timestamp = new Date().toLocaleTimeString();
+                const resultItem = {
+                    timestamp: timestamp,
+                    number: duplicates[0],
+                    id: Date.now()
+                };
+                
+                this.continuousResults.unshift(resultItem); // 新しい結果を先頭に追加
+                
+                // 最大10件まで保持
+                if (this.continuousResults.length > 10) {
+                    this.continuousResults = this.continuousResults.slice(0, 10);
+                }
+                
+                this.updateContinuousResults();
+                
+                // 履歴に追加
+                const historyEntry = `[${timestamp}] ✅ 照合完了: ${duplicates[0]}`;
+                this.detectionHistory.push(historyEntry);
+                if (this.detectionHistory.length > this.maxHistoryLength) {
+                    this.detectionHistory.shift();
+                }
+                this.updateHistory();
+                
+                console.log('Continuous detection - Match found:', duplicates[0], 'Total matches:', this.matchCount);
+                
+                // 短時間の休止後にスキャンを継続（重複検出を避けるため）
+                setTimeout(() => {
+                    const statusElement = document.getElementById('continuousDetectedNumbers');
+                    if (statusElement) {
+                        statusElement.textContent = 'スキャン継続中...';
+                        statusElement.className = 'status-value pending';
+                    }
+                }, 2000);
+            }
+
+            updateContinuousResults() {
+                const resultsList = document.getElementById('continuousResultsList');
+                if (!resultsList) return;
+                
+                if (this.continuousResults.length === 0) {
+                    resultsList.innerHTML = '<div class="history-item no-data">まだ検出結果がありません</div>';
+                    return;
+                }
+                
+                resultsList.innerHTML = this.continuousResults
+                    .map(result => `
+                        <div class="continuous-result-item">
+                            <div class="result-timestamp">${result.timestamp}</div>
+                            <div class="result-number">✅ 番号: ${result.number}</div>
+                        </div>
+                    `).join('');
             }
 
             getStableNumber() {
@@ -1105,7 +1295,7 @@
                 const historyList = document.getElementById('historyList');
                 if (historyList) {
                     if (this.detectionHistory.length === 0) {
-                        historyList.innerHTML = '<div class="history-item">まだ検出履歴がありません</div>';
+                        historyList.innerHTML = '<div class="history-item no-data">まだ検出履歴がありません</div>';
                     } else {
                         historyList.innerHTML = this.detectionHistory
                             .slice(-5)
@@ -1139,12 +1329,16 @@
                 this.secondDetectedNumber = null;
                 this.isMatched = false;
                 this.detectionHistory = [];
+                this.continuousResults = [];
+                this.matchCount = 0;
+                this.previousResults = [];
 
                 this.stopScanning();
 
                 const matchResult = document.getElementById('matchResult');
                 const duplicateResult = document.getElementById('duplicateResult');
                 const historyList = document.getElementById('historyList');
+                const matchCountElement = document.getElementById('matchCount');
 
                 if (matchResult) {
                     matchResult.style.display = 'none';
@@ -1152,8 +1346,10 @@
                 }
                 if (duplicateResult) duplicateResult.style.display = 'none';
                 if (historyList) historyList.innerHTML = '';
+                if (matchCountElement) matchCountElement.textContent = '0';
 
                 this.updateHistory();
+                this.updateContinuousResults();
 
                 if (this.scanMode === 'sequential') {
                     const currentElement = document.getElementById('currentNumber');
@@ -1171,6 +1367,12 @@
                     if (secondElement) {
                         secondElement.textContent = '未検出';
                         secondElement.className = 'status-value pending';
+                    }
+                } else if (this.scanMode === 'continuous') {
+                    const detectedElement = document.getElementById('continuousDetectedNumbers');
+                    if (detectedElement) {
+                        detectedElement.textContent = 'スキャン開始を押してください';
+                        detectedElement.className = 'status-value pending';
                     }
                 } else {
                     const detectedElement = document.getElementById('detectedNumbers');
