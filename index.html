@@ -272,6 +272,12 @@
             animation: fadeInScale 0.5s ease-out;
         }
 
+        .duplicate-result.yellow {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+        }
+
         .duplicate-numbers {
             font-family: 'Courier New', monospace;
             font-weight: bold;
@@ -293,6 +299,12 @@
             margin-bottom: 0.5rem;
             font-size: 0.85rem;
             animation: slideInLeft 0.3s ease-out;
+        }
+
+        .continuous-result-item.yellow {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
         }
 
         .continuous-result-item:last-child {
@@ -546,6 +558,7 @@
                 // 連続スキャンモード用
                 this.continuousResults = [];
                 this.matchCount = 0;
+                this.alternateColor = false; // 色の交互表示用フラグ
                 
                 // 高速化用の変数
                 this.previousResults = [];
@@ -1192,10 +1205,20 @@
                 // 連続スキャンモードでは一致検出後もスキャンを継続
                 this.matchCount++;
                 
+                // 色を交互に切り替え
+                this.alternateColor = !this.alternateColor;
+                const isYellow = this.alternateColor;
+                
                 const detectedElement = document.getElementById('continuousDetectedNumbers');
                 if (detectedElement) {
                     detectedElement.textContent = `✅ ${duplicates.join(', ')}`;
-                    detectedElement.className = 'status-value detected';
+                    if (isYellow) {
+                        detectedElement.className = 'status-value detected';
+                        detectedElement.style.color = '#856404'; // 黄色系の文字色
+                    } else {
+                        detectedElement.className = 'status-value detected';
+                        detectedElement.style.color = '#155724'; // 緑色系の文字色
+                    }
                 }
                 
                 // マッチカウンターを更新
@@ -1209,7 +1232,8 @@
                 const resultItem = {
                     timestamp: timestamp,
                     number: duplicates[0],
-                    id: Date.now()
+                    id: Date.now(),
+                    isYellow: isYellow // 色情報を追加
                 };
                 
                 this.continuousResults.unshift(resultItem); // 新しい結果を先頭に追加
@@ -1222,14 +1246,14 @@
                 this.updateContinuousResults();
                 
                 // 履歴に追加
-                const historyEntry = `[${timestamp}] ✅ 照合完了: ${duplicates[0]}`;
+                const historyEntry = `[${timestamp}] ${isYellow ? '🟡' : '🟢'} 照合完了: ${duplicates[0]}`;
                 this.detectionHistory.push(historyEntry);
                 if (this.detectionHistory.length > this.maxHistoryLength) {
                     this.detectionHistory.shift();
                 }
                 this.updateHistory();
                 
-                console.log('Continuous detection - Match found:', duplicates[0], 'Total matches:', this.matchCount);
+                console.log('Continuous detection - Match found:', duplicates[0], 'Total matches:', this.matchCount, 'Color:', isYellow ? 'Yellow' : 'Green');
                 
                 // 短時間の休止後にスキャンを継続（重複検出を避けるため）
                 setTimeout(() => {
@@ -1237,6 +1261,7 @@
                     if (statusElement) {
                         statusElement.textContent = 'スキャン継続中...';
                         statusElement.className = 'status-value pending';
+                        statusElement.style.color = ''; // 色をリセット
                     }
                 }, 2000);
             }
@@ -1252,9 +1277,9 @@
                 
                 resultsList.innerHTML = this.continuousResults
                     .map(result => `
-                        <div class="continuous-result-item">
+                        <div class="continuous-result-item ${result.isYellow ? 'yellow' : ''}">
                             <div class="result-timestamp">${result.timestamp}</div>
-                            <div class="result-number">✅ 番号: ${result.number}</div>
+                            <div class="result-number">${result.isYellow ? '🟡' : '🟢'} 番号: ${result.number}</div>
                         </div>
                     `).join('');
             }
@@ -1322,6 +1347,7 @@
                 this.detectionHistory = [];
                 this.continuousResults = [];
                 this.matchCount = 0;
+                this.alternateColor = false; // 色交互フラグもリセット
                 this.previousResults = [];
 
                 this.stopScanning();
